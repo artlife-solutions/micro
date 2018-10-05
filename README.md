@@ -34,17 +34,17 @@ export async function main(service: IMicroService): Promise<void> {
     // The callback is wrapped for error handling, performance metrics and message tracing.
     // A bit like Express's post function.
     //
-    service.on("do-some-work", async (args, ack) => {
+    service.on("do-some-work", async (args, res) => {
         //
         // ... do some work ...
         //
 
-        await service.emit("classify-images", { imageIds: args.imageIds });
+        await service.emit("another-event", { your: "json data goes here" });
 
         //
         // Acknowledge that the message was handled correctly.
         //
-        await ack(); 
+        await res.ack(); 
     });
 
     //
