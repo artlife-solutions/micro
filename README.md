@@ -4,7 +4,7 @@ A tiny and very opinionated microservices framework inspired expressjs.
 
 This is library to host all the common and boring features shared between our microservices.
 
-WARNING: This library is a working in progress and isn't intended to be general purpose.
+WARNING: This library is a work in progress and isn't intended to be general purpose.
 
 Things like:
 - logging
