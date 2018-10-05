@@ -14,9 +14,6 @@
         "test:watch": "nyc mocha --watch --watch-extensions ts --opts ./src/test/mocha.opts",
         "prepublishOnly": "tsc"
     },
-    "bin": {
-        "typescript-template-cli": "./bin/cli"
-    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/artlife-solutions/micro.git"

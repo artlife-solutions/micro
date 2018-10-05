@@ -1,12 +1,12 @@
 import { assert, expect } from 'chai';
 import 'mocha';
-import { ExampleClass } from '../index';
+import micro from '../index';
 
-describe('main test suite', () => {
+describe('micro', () => {
 
     it('should be true', ()  => {
 
-        expect((new ExampleClass()).returnsTrue()).to.be.true;      
+        expect(true).to.be.true;
 
     });
 
