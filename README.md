@@ -39,6 +39,9 @@ export async function main(service: IMicroService): Promise<void> {
         // ... do some work ...
         //
 
+        //
+        // Emit an outgoing event.
+        //
         await service.emit("another-event", { your: "json data goes here" });
 
         //
@@ -56,6 +59,10 @@ export async function main(service: IMicroService): Promise<void> {
     service.get('/another-end-point', async (req, res) => {
         //
         // ... do some work ...
+        //
+
+        //
+        // Respond to the request with some JSON data.
         //
         await res.json({
             your: "json data"
