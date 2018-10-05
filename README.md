@@ -4,6 +4,8 @@ A tiny and very opinionated microservices framework inspired expressjs.
 
 This is library to host all the command and boring features shared between our microservices.
 
+WARNING: This library is a working in progress and isn't intended to be general purpose.
+
 Things like:
 - logging
 - basic error handling
@@ -17,13 +19,14 @@ Things like:
 
 ## Example Usage (TypeScript)
 
+```javascript
     import * micro from 'micro';
 
     //
     // Entry point for the microservice.
     // The 'export' keyword is for testing.
     //
-    export async function main(): Promise<void> { 
+    export async function main(service: IMicroService): Promise<void> { 
 
         //
         // Handle a message, do some work, then publish a new message.
@@ -42,18 +45,6 @@ Things like:
             // Acknowledge that the message was handled correctly.
             //
             await ack(); 
-        });
-
-        //
-        // Create a HTTP GET request handler for a particular route.
-        // Under the hood this is handled by Express, but the callback is wrapped for 
-        // error handling, performance metrics and request tracing.
-        //
-        service.get('/my-end-point', async (req, res) => {
-            //
-            // Proxy the request to 'another-service'.
-            //
-            service.forwardRequest("another-service", "/a-diferentend-points", { optionalQueryParameters: "go here" }, res);
         });
 
         //
@@ -78,7 +69,7 @@ Things like:
             //
             // Proxy the request to 'another-service'.
             //
-            service.forwardRequest("another-service", "/a-diferentend-points", { optionalQueryParameters: "go here" }, res);
+            service.forwardRequest("another-service", "/a-different-end-point", { optionalQueryParameters: "go here" }, res);
         });
 
         //
@@ -108,12 +99,7 @@ Things like:
         // Don't start microservice, this allows the service to be loaded for unit testing.
         //        
     }
-
-    
-
-
-
-
+```
 
 ## Building the code
 
