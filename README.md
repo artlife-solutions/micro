@@ -1,6 +1,6 @@
 # micro
 
-A tiny and very opinionated microservices framework inspired expressjs.
+A tiny and very opinionated microservices framework inspired by expressjs.
 
 This is library to host all the common and boring features shared between our microservices.
 
