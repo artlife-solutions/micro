@@ -17,7 +17,7 @@ export async function main(service: IMicroService): Promise<void> {
     // The callback is wrapped for error handling, performance metrics and message tracing.
     // A bit like Express's post function.
     //
-    service.on("do-some-work", async (args, res) => {
+    await service.on("do-some-work", async (args, res) => {
         //
         // ... do some work ...
         //

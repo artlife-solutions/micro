@@ -284,7 +284,7 @@ class MicroService implements IMicroService {
 
             await eventHandler(args, eventResponse);
 
-            console.log(eventHandler + " handler done."); //todo:
+            console.log(eventName + " handler done."); //todo:
         };
 
         this.messagingChannel!.consume(eventName, asyncHandler(this, consumeCallback));
