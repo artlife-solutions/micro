@@ -2,7 +2,7 @@
 // This is a simple example Microservice.
 //
 
-import micro from '../index';
+import { micro } from '../index';
 import { IMicroService } from '../index';
 
 //

@@ -1,6 +1,6 @@
 import { assert, expect } from 'chai';
 import 'mocha';
-import micro from '../index';
+import { micro } from '../index';
 
 describe('micro', () => {
 
