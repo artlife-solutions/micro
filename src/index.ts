@@ -166,9 +166,6 @@ class MicroService implements IMicroService {
         this.httpApp.get("/is-alive", (req, res) => {
             res.json({ ok: true });
         });
-
-
-        
     }
 
     //
@@ -225,17 +222,12 @@ class MicroService implements IMicroService {
     //
     private async startMessaging(): Promise<void> {
         if (!this.messagingChannel) {
+            console.log("Lazily initiating messaging system."); //todo:
             this.messagingConnection = await this.connectMessaging();
             this.messagingChannel = await this.createMessagingChannel();
         
             //todo:
             // await connection.close();
-                    
-            /*todo:
-            for (const queueName of this._config.queues) {
-                await this._channel.assertQueue(queueName); //todo: really just want to do this lazily!
-            }
-            */
         }
         
     }
@@ -245,6 +237,7 @@ class MicroService implements IMicroService {
     //
     private async assertQueue(queueName: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
+            console.log("Starting message queue: " + queueName); //todo:
             this.messagingChannel!.assertQueue(queueName, {}, err => {
                 if (err) {
                     reject(err);
@@ -286,6 +279,8 @@ class MicroService implements IMicroService {
 
             console.log(eventName + " handler done."); //todo:
         };
+
+        console.log("Recieving events on queue " + eventName); //todo:
 
         this.messagingChannel!.consume(eventName, asyncHandler(this, consumeCallback));
     }
@@ -389,6 +384,8 @@ class MicroService implements IMicroService {
                 firstKey = false;
             }
         }
+
+        console.log(">> " + fullUrl); //TODO:
 
         const expressResponse = (toResponse as any).expressResponse as express.Response;
         request(fullUrl).pipe(expressResponse);
