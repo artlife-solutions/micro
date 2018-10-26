@@ -15,6 +15,10 @@ const host = argv.host || process.env.HOST || '0.0.0.0';
 const port = argv.port || process.env.PORT || 3000;
 const messagingHost = argv.message_host || process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
 
+console.log("Host:      " + host);
+console.log("Port:      " + port);
+console.log("Messaging: " + messagingHost);
+
 /**
  * Configures a microservice.
  */
