@@ -332,7 +332,7 @@ class MicroService implements IMicroService {
     // Create a full URL for a service request mapping the service name to host name if necessary.
     //
     makeFullUrl(serviceName: string, route: string) {
-        const hostName = this.serviceMap[serviceName] || serviceName;
+        const hostName = this.serviceMap[serviceName] || "http://" + serviceName;
         return hostName + route;
     }
     
