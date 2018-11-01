@@ -9,7 +9,7 @@ import { argv } from 'yargs';
 import * as request from 'request';
 import * as requestPromise from 'request-promise';
 import { readJsonFile } from './file';
-import { asyncHandler } from './utils';
+import { asyncHandler, retry } from './utils';
 
 const host = argv.host || process.env.HOST || '0.0.0.0';
 const port = argv.port || process.env.PORT || 3000;
@@ -227,7 +227,7 @@ class MicroService implements IMicroService {
     private async startMessaging(): Promise<void> {
         if (!this.messagingChannel) {
             console.log("Lazily initiating messaging system."); //todo:
-            this.messagingConnection = await this.connectMessaging();
+            this.messagingConnection = await retry(() => this.connectMessaging(), 3, 1000);
             this.messagingChannel = await this.createMessagingChannel();
         
             //todo:

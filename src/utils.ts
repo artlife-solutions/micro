@@ -31,7 +31,7 @@ export function asyncHandler<SelfT> (self: SelfT, handler: Function) {
 //
 // Retry a failing operation a number of times.
 //
-export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttempts: number): Promise<ReturnT> {
+export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttempts: number, waitTimeMS: number): Promise<ReturnT> {
     let lastError: any | undefined;
 
     while (maxAttempts-- > 0) {
@@ -40,7 +40,18 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
             return result;
         }
         catch (err) {
+            if (maxAttempts > 1) {
+                console.error("Operation failed, will retry.");
+                console.error("Error:");
+                console.error(err && err.stack || err);
+            }
+            else {
+                console.error("Operation failed, no more retries allowed.");
+            }
+
             lastError = err;
+
+            await sleep(waitTimeMS);
         }
     }
 
