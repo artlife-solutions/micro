@@ -326,7 +326,7 @@ class MicroService implements IMicroService {
 
             (response as any).expressResponse = res; // Hide the Express response so we can retreive it latyer.
 
-            await requestHandler(req, res);
+            await requestHandler(req, response);
 
             console.log(route + " handler done.")
         }));
