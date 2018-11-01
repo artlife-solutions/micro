@@ -1,6 +1,6 @@
 {
     "name": "@artlife/micro",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "description": "A tiny and very opinionated microservices framework inspired by expressjs.",
     "main": "build/index.js",
     "types": "build/index.d.ts",
@@ -31,6 +31,7 @@
         "moment": "2.22.2",
         "request": "^2.88.0",
         "request-promise": "^4.2.2",
+        "chai": "4.2.0",
         "yargs": "^12.0.2"
     },
     "devDependencies": {
@@ -42,7 +43,6 @@
         "@types/request": "^2.47.1",
         "@types/request-promise": "^4.1.42",
         "@types/yargs": "^12.0.1",
-        "chai": "4.2.0",
         "mocha": "5.2.0",
         "nyc": "13.0.1",
         "source-map-support": "0.5.9",
