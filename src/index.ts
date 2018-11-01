@@ -57,6 +57,13 @@ export interface IHttpResponse<ResponseT> {
      * Send JSON data in response to a HTTP get request.
      */
     json(data: ResponseT): void;
+
+    /**
+     * Send a file to the client.
+     * 
+     * @param filePath The path to the file to send.
+     */
+    sendFile(filePath: string): Promise<void>;
 }
 
 /**
@@ -321,7 +328,20 @@ class MicroService implements IMicroService {
             const response: IHttpResponse<ResponseT> = {
                 json(data: ResponseT): void {
                     res.json(data);
-                }                
+                },
+
+                sendFile(filePath: string): Promise<void> {
+                    return new Promise<void>((resolve, reject) => {
+                        res.sendFile(filePath, (err: any) => {
+                            if (err) {
+                                reject(err);
+                            }
+                            else {
+                                resolve();
+                            }
+                        });
+                    });
+                },
             };
 
             (response as any).expressResponse = res; // Hide the Express response so we can retreive it latyer.
@@ -347,17 +367,19 @@ class MicroService implements IMicroService {
      * @param route The HTTP route on the service to make the request to.
      * @param params Query parameters for the request.
      */
-    async request(serviceName: string, route: string, params: any) {
+    async request(serviceName: string, route: string, params?: any) {
         let fullUrl = this.makeFullUrl(serviceName, route);
-        const paramKeys = Object.keys(params);
-        let firstKey = true;
-        for (let keyIndex = 0; keyIndex < paramKeys.length; ++keyIndex) {
-            const key = paramKeys[keyIndex];
-            const value = params[key];
-            if (value !== undefined) {
-                fullUrl += firstKey ? "?" : "&"
-                fullUrl += key + "=" + value;
-                firstKey = false;
+        if (params) {
+            const paramKeys = Object.keys(params);
+            let firstKey = true;
+            for (let keyIndex = 0; keyIndex < paramKeys.length; ++keyIndex) {
+                const key = paramKeys[keyIndex];
+                const value = params[key];
+                if (value !== undefined) {
+                    fullUrl += firstKey ? "?" : "&"
+                    fullUrl += key + "=" + value;
+                    firstKey = false;
+                }
             }
         }
 
