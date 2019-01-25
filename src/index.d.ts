@@ -135,20 +135,19 @@ export interface IMicroService {
      * Create a handler for listening to broadcasted messages on (optional) routes.
      * Implemented by Rabbitmq under the hood for reliable messaging.
      * 
-     * @param eventArgs Event args to publish with the event and be received at the other end.
-     * @param eventHandler Callback to be invoke when the incoming event is received.
      * @param exchangeConfig Exchange settings to broadcast to.
+     * @param eventHandler Callback to be invoke when the incoming event is received.
      */
-    listen<EventArgsT>(eventArgs: EventArgsT, eventHandler: EventHandlerFn<EventArgsT>, exchangeConfig?: IExchangeConfig): Promise<void>;
+    listen<EventArgsT>(exchangeConfig: IExchangeConfig | null, eventHandler: EventHandlerFn<EventArgsT>): Promise<void>;
 
     /**
      * Emit a named outgoing event to an exchange on (optional) routes.
      * Implemented by Rabbitmq under the hood for reliable messaging.
      * 
-     * @param eventArgs Event args to publish with the event and be received at the other end.
      * @param exchangeConfig Exchange settings to broadcast to.
+     * @param eventArgs Event args to publish with the event and be received at the other end.
      */
-    broadcast<EventArgsT>(eventArgs: EventArgsT, exchangeConfig?: IExchangeConfig): Promise<void>;
+    broadcast<EventArgsT>(exchangeConfig: IExchangeConfig | null, eventArgs: EventArgsT, ): Promise<void>;
 
     /**
      * Create a handler for incoming HTTP GET requests.

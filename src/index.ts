@@ -294,11 +294,10 @@ class MicroService implements IMicroService {
      * Create a handler for listening to broadcasted messages on (optional) routes.
      * Implemented by Rabbitmq under the hood for reliable messaging.
      * 
-     * @param eventArgs Event args to publish with the event and be received at the other end.
-     * @param eventHandler Callback to be invoke when the incoming event is received.
      * @param exchangeConfig Exchange settings to broadcast to.
+     * @param eventHandler Callback to be invoke when the incoming event is received.
      */
-    async listen<EventArgsT>(eventArgs: EventArgsT, eventHandler: EventHandlerFn<EventArgsT>, exchangeConfig?: IExchangeConfig): Promise<void> {
+    async listen<EventArgsT>(exchangeConfig: IExchangeConfig | null, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
         const exchange = exchangeConfig || new ExchangeConfig();
 
         await this.startMessaging();
@@ -342,7 +341,7 @@ class MicroService implements IMicroService {
      * @param eventArgs Event args to publish with the event and be received at the other end.
      * @param exchangeConfig Exchange settings to broadcast to.
      */
-    async broadcast<EventArgsT>(eventArgs: EventArgsT, exchangeConfig?: IExchangeConfig): Promise<void> {
+    async broadcast<EventArgsT>(exchangeConfig: IExchangeConfig | null, eventArgs: EventArgsT): Promise<void> {
         await this.startMessaging();
         const exchange = exchangeConfig || new ExchangeConfig();
         await this.assertExchange(exchange.name, exchange.type);
