@@ -10,6 +10,22 @@ import * as request from 'request';
 import * as requestPromise from 'request-promise';
 import { readJsonFile } from './file';
 import { asyncHandler, retry } from './utils';
+//import * as bodyParser from 'body-parser'
+import { reject, resolve } from 'bluebird';
+
+import {
+    ILog,
+    IMicroServiceConfig,
+    IMicroService,
+    IExchangeConfig,
+    StringMap,
+    IEventResponse,
+    EventHandlerFn,
+    GetRequestHandlerFn,
+    PostRequestHandlerFn,
+    IHttpRequest,
+    IHttpResponse,
+} from './index.d'
 
 const host = argv.host || process.env.HOST || '0.0.0.0';
 const port = argv.port || process.env.PORT || 3000;
@@ -18,36 +34,6 @@ const messagingHost = argv.message_host || process.env.MESSAGING_HOST || "amqp:/
 console.log("Host:      " + host);
 console.log("Port:      " + port);
 console.log("Messaging: " + messagingHost);
-
-/**
- * Logging interface. Allows log from multiple microservices to be aggregated.
- */
-export interface ILog {
-    /**
-     * Issue a warning.
-     */
-    warn(...args: any[]): void;
-
-    /**
-     * Issue an information message.
-     */
-    info(...args: any[]): void;
-
-    /**
-     * Issue a verbose message.
-     */
-    verbose(...args: any[]): void;
-
-    /**
-     * Record an error message.
-     */
-    error(...args: any[]): void;
-
-    /**
-     * Record an exception that was thrown
-     */
-    exception(err: any, ...args: any[]): void;
-}
 
 //
 // Logging implementation.
@@ -91,126 +77,23 @@ class Log implements ILog {
     }
 }
 
-/**
- * Configures a microservice.
- */
-export interface IMicroServiceConfig {
 
-};
+export class ExchangeConfig implements IExchangeConfig {
+    name: string;
+    type: string;
+    routes: string[];
 
-/**
- * Interface for responding to events.
- */
-export interface IEventResponse {
-    /**
-     * Acknoledge that the event was successfully handled.
-     */
-    ack(): Promise<void>;
-}
-
-/**
- * Defines a potentially asynchronous callback function for handling an incoming event.
- */
-export type EventHandlerFn<EventArgsT> = (eventArgs: EventArgsT, response: IEventResponse) => Promise<void>;
-
-/**
- * Interface that represents a HTTP GET request.
- */
-export interface IHttpRequest <RequestBodyT> {
-
-}
-
-/**
- * Interface that represents a HTTP GET request.
- */
-export interface IHttpResponse<ResponseT> {
-
-    /**
-     * Send JSON data in response to a HTTP get request.
-     */
-    json(data: ResponseT): void;
-
-    /**
-     * Send a file to the client.
-     * 
-     * @param filePath The path to the file to send.
-     */
-    sendFile(filePath: string): Promise<void>;
-}
-
-/**
- * Defines a potentially asynchronous callback function for handling an incoming HTTP GET request.
- */
-export type GetRequestHandlerFn<RequestBodyT, ResponseT> = (request: IHttpRequest<RequestBodyT>, response: IHttpResponse<ResponseT>) => Promise<void>;
-
-/**
- * Interface that represents a particular microservice instance.
- */
-export interface IMicroService {
-
-    /**
-     * Create a handler for a named incoming event.
-     * Implemented by Rabbitmq under the hood for reliable messaging.
-     * 
-     * @param eventName The name of the event to handle.
-     * @param eventHandler Callback to be invoke when the incoming event is received.
-     */
-    on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void>;
-
-    /**
-     * Emit a named outgoing event.
-     * Implemented by Rabbitmq under the hood for reliable messaging.
-     * 
-     * @param eventName The name of the event to emit.
-     * @param eventArgs Event args to publish with the event and be received at the other end.
-     */
-    emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void>;
-
-    /**
-     * Create a handler for incoming HTTP GET requests.
-     * Implemented by Express under the hood.
-     */
-    get<RequestBodyT, ResponseT>(route: string, requestHandler: GetRequestHandlerFn<RequestBodyT, ResponseT>): void;
-
-    /**
-     * Forward HTTP get request to another named service.
-     * The response from the forward requests is automatically piped into the passed in response.
-     * 
-     * @param serviceName The name of the service to forward the request to.
-     * @param route The HTTP GET route to forward to.
-     * @param body The body of the forwarded request.
-     * @param response The response for the HTTP GET current request, to have the response forwarded to.
-     */
-    forwardRequest<RequestBodyT, ResponseT>(serviceName: string, route: string, body: RequestBodyT, response: IHttpResponse<ResponseT>): void;
-
-    /**
-     * Setup serving of static files.
-     * 
-     * @param dirPath The path to the directory that contains static files.
-     */
-    static(dirPath: string): void;
-
-    /**
-     * Reference to the logging interface.
-     * This allows the logging from multiple microservices to be aggregated.
-     */
-    readonly log: ILog;
-
-    /**
-     * Starts the microservice.
-     * It starts listening for incoming HTTP requests and events.
-     */
-    start(): Promise<void>;
-
+    constructor (name?: string, type?: string, routes?: string[]) {
+        this.name = name || 'broadcast';
+        this.type = type || 'fanout';
+        if (routes && routes.length > 0) this.routes = routes
+        else this.routes = [ '#' ];
+    }
 }
 
 const defaultConfig: IMicroServiceConfig = {
 
 };
-
-interface StringMap {
-    [index: string]: string;
-}
 
 //
 // Class that represents a particular microservice instance.
@@ -251,6 +134,9 @@ class MicroService implements IMicroService {
             res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
             next();
         }); 
+        
+        // this.httpApp.use(bodyParser.urlencoded({ extended: false }));
+        // this.httpApp.use(bodyParser.json());
         
         this.httpApp.get("/is-alive", (req, res) => {
             res.json({ ok: true });
@@ -337,6 +223,19 @@ class MicroService implements IMicroService {
             })
         });
     }
+
+    //
+    // Make sure a RabbitMQ exchange exists before using it.
+    //
+    private async assertExchange(name: string, type: string): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            console.log("Starting message exchange: " + name);
+            this.messagingChannel!.assertExchange(name, type, {}, err => {
+                if (err) reject(err);
+                resolve();
+            });
+        });
+    }
     
 
     /**
@@ -390,13 +289,76 @@ class MicroService implements IMicroService {
         console.log(eventArgs);
         this.messagingChannel!.sendToQueue(eventName, new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?
     }
+
+    /**
+     * Create a handler for listening to broadcasted messages on (optional) routes.
+     * Implemented by Rabbitmq under the hood for reliable messaging.
+     * 
+     * @param eventArgs Event args to publish with the event and be received at the other end.
+     * @param eventHandler Callback to be invoke when the incoming event is received.
+     * @param exchangeConfig Exchange settings to broadcast to.
+     */
+    async listen<EventArgsT>(eventArgs: EventArgsT, eventHandler: EventHandlerFn<EventArgsT>, exchangeConfig?: IExchangeConfig): Promise<void> {
+        const exchange = exchangeConfig || new ExchangeConfig();
+
+        await this.startMessaging();
+        await this.assertExchange(exchange.name, exchange.type);
+
+        await this.messagingChannel!.assertQueue('', {}, (err, q) => {
+            if (err) reject(err);
+
+            exchange.routes.forEach(route => this.messagingChannel!.bindQueue(q.queue, exchange.name, route));
+            resolve();
+        });
+
+        const messagingChannel = this.messagingChannel!;
+
+        async function consumeCallback(msg: amqp.Message): Promise<void> {
+            console.log("Handling " + exchange.name); //TODO: Logging.
+
+            const args = JSON.parse(msg.content.toString())
+            console.log(args); //TODO:
+
+            const eventResponse: IEventResponse = {
+                async ack(): Promise<void> {
+                    messagingChannel.ack(msg);
+                }
+            }
+
+            await eventHandler(args, eventResponse);
+
+            console.log(exchange.name + " handler done."); //todo:
+        };
+
+        console.log(`Recieving events on ${exchange.name}:${exchange.type} - ${exchange.routes.join(' ')}`); //todo:
+
+        this.messagingChannel!.consume(exchange.name, asyncHandler(this, consumeCallback));
+    }
+
+    /**
+     * Emit a named outgoing event to an exchange on (optional) routes.
+     * Implemented by Rabbitmq under the hood for reliable messaging.
+     * 
+     * @param eventArgs Event args to publish with the event and be received at the other end.
+     * @param exchangeConfig Exchange settings to broadcast to.
+     */
+    async broadcast<EventArgsT>(eventArgs: EventArgsT, exchangeConfig?: IExchangeConfig): Promise<void> {
+        await this.startMessaging();
+        const exchange = exchangeConfig || new ExchangeConfig();
+        await this.assertExchange(exchange.name, exchange.type);
+
+        console.log(`sendMessage to ${exchange.name} : ${exchange.type} - ${exchange.routes.join(' ')}`); //TODO: Logging.
+        console.log(eventArgs);
+        this.messagingChannel!.publish(exchange.name, exchange.routes.join(' '), new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?
+    }
+
     /**
      * Create a handler for incoming HTTP GET requests.
      * Implemented by Express under the hood.
      */
     get<RequestBodyT, ResponseT>(route: string, requestHandler: GetRequestHandlerFn<RequestBodyT, ResponseT>): void {
         this.httpApp.get(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
-            console.log("Handling " + route); //TODO: Proper optional logging.
+            console.log("Handling GET", route); //TODO: Proper optional logging.
             console.log(req.query);
 
             const request: IHttpRequest<RequestBodyT> = { //TODO: Make a proper class from this.
@@ -426,7 +388,18 @@ class MicroService implements IMicroService {
 
             await requestHandler(req, response);
 
-            console.log(route + " handler done.")
+            console.log(route, "GET handler done.")
+        }));
+    }
+
+    //
+    // POST request stub
+    //
+    post<RequestBodyT, ResponseT>(route: string, requestHandler: PostRequestHandlerFn<RequestBodyT, ResponseT>): void {
+        this.httpApp.post(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
+            console.log("Handling POST", route);
+            console.log(req.query);
+            console.log("POST has not been implemented yet");
         }));
     }
 
