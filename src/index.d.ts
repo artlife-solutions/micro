@@ -1,3 +1,5 @@
+import * as express from 'express';
+
 /**
  * Logging interface. Allows log from multiple microservices to be aggregated.
  */
@@ -72,39 +74,14 @@ export interface IEventResponse {
 export type EventHandlerFn<EventArgsT> = (eventArgs: EventArgsT, response: IEventResponse) => Promise<void>;
 
 /**
- * Interface that represents a HTTP GET request.
- */
-export interface IHttpRequest <RequestBodyT> {
-
-}
-
-/**
- * Interface that represents a HTTP GET request.
- */
-export interface IHttpResponse<ResponseT> {
-
-    /**
-     * Send JSON data in response to a HTTP get request.
-     */
-    json(data: ResponseT): void;
-
-    /**
-     * Send a file to the client.
-     * 
-     * @param filePath The path to the file to send.
-     */
-    sendFile(filePath: string): Promise<void>;
-}
-
-/**
  * Defines a potentially asynchronous callback function for handling an incoming HTTP GET request.
  */
-export type GetRequestHandlerFn<RequestBodyT, ResponseT> = (request: IHttpRequest<RequestBodyT>, response: IHttpResponse<ResponseT>) => Promise<void>;
+export type GetRequestHandlerFn = (request: express.Request, response: express.Response) => Promise<void>;
 
 /**
  * Defines a potentially asynchronous callback function for handling an incoming HTTP POST request.
  */
-export type PostRequestHandlerFn<RequestBodyT, ResponseT> = (request: IHttpRequest<RequestBodyT>, response: IHttpResponse<ResponseT>) => Promise<void>;
+export type PostRequestHandlerFn = (request: express.Request, response: express.Response) => Promise<void>;
 
 /**
  * Interface that represents a particular microservice instance.
@@ -155,7 +132,7 @@ export interface IMicroService {
      * Create a handler for incoming HTTP GET requests.
      * Implemented by Express under the hood.
      */
-    get<RequestBodyT, ResponseT>(route: string, requestHandler: GetRequestHandlerFn<RequestBodyT, ResponseT>): void;
+    get(route: string, requestHandler: GetRequestHandlerFn): void;
 
     /**
      * Create a handler for incoming HTTP POST requests.
@@ -164,7 +141,7 @@ export interface IMicroService {
      * @param route 
      * @param requestHandler 
      */
-    post<RequestBodyT, ResponseT>(route: string, requestHandler: PostRequestHandlerFn<RequestBodyT, ResponseT>): void;
+    post(route: string, requestHandler: PostRequestHandlerFn): void;
 
     /**
      * Forward HTTP get request to another named service.
@@ -175,7 +152,7 @@ export interface IMicroService {
      * @param body The body of the forwarded request.
      * @param response The response for the HTTP GET current request, to have the response forwarded to.
      */
-    forwardRequest<RequestBodyT, ResponseT>(serviceName: string, route: string, body: RequestBodyT, response: IHttpResponse<ResponseT>): void;
+    forwardRequest<RequestBodyT, ResponseT>(serviceName: string, route: string, body: RequestBodyT, response: express.Response): void;
 
     /**
      * Setup serving of static files.
@@ -189,6 +166,11 @@ export interface IMicroService {
      * This allows the logging from multiple microservices to be aggregated.
      */
     readonly log: ILog;
+
+    /**
+     * Reference to the express object.
+     */
+    readonly expressApp: express.Express;
 
     /**
      * Starts the microservice.

@@ -22,9 +22,7 @@ import {
     IEventResponse,
     EventHandlerFn,
     GetRequestHandlerFn,
-    PostRequestHandlerFn,
-    IHttpRequest,
-    IHttpResponse,
+    PostRequestHandlerFn
 } from './index.d'
 
 const host = argv.host || process.env.HOST || '0.0.0.0';
@@ -103,11 +101,6 @@ class MicroService implements IMicroService {
     private messagingChannel?: amqp.Channel;
 
     //
-    // Express HTTP app.
-    //
-    private httpApp: Express;
-
-    //
     // Configuration for the microservice.
     //
     private config: IMicroServiceConfig;
@@ -119,18 +112,18 @@ class MicroService implements IMicroService {
 
     constructor(config?: IMicroServiceConfig) {
         this.config = config || defaultConfig;
-        this.httpApp = express();
+        this.expressApp = express();
 
-        this.httpApp.use((req, res, next) => { //TODO: Only for testing! Remove this in prod.
+        this.expressApp.use((req, res, next) => { //TODO: Only for testing! Remove this in prod.
             res.header("Access-Control-Allow-Origin", "*");
             res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
             next();
         }); 
         
-        // this.httpApp.use(bodyParser.urlencoded({ extended: false }));
-        // this.httpApp.use(bodyParser.json());
+        // this.expressApp.use(bodyParser.urlencoded({ extended: false }));
+        // this.expressApp.use(bodyParser.json());
         
-        this.httpApp.get("/is-alive", (req, res) => {
+        this.expressApp.get("/is-alive", (req, res) => {
             res.json({ ok: true });
         });
     }
@@ -141,7 +134,7 @@ class MicroService implements IMicroService {
     private async startHttpServer(): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             // @ts-ignore
-            this.httpApp.listen(port, host, (err: any) => {
+            this.expressApp.listen(port, host, (err: any) => {
                 if (err) {
                     reject(err);
                 }
@@ -363,37 +356,12 @@ class MicroService implements IMicroService {
      * Create a handler for incoming HTTP GET requests.
      * Implemented by Express under the hood.
      */
-    get<RequestBodyT, ResponseT>(route: string, requestHandler: GetRequestHandlerFn<RequestBodyT, ResponseT>): void {
-        this.httpApp.get(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
+    get(route: string, requestHandler: GetRequestHandlerFn): void {
+        this.expressApp.get(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
             console.log("Handling GET", route); //TODO: Proper optional logging.
             console.log(req.query);
 
-            const request: IHttpRequest<RequestBodyT> = { //TODO: Make a proper class from this.
-                //TODO:
-            };
-
-            const response: IHttpResponse<ResponseT> = {
-                json(data: ResponseT): void {
-                    res.json(data);
-                },
-
-                sendFile(filePath: string): Promise<void> {
-                    return new Promise<void>((resolve, reject) => {
-                        res.sendFile(filePath, (err: any) => {
-                            if (err) {
-                                reject(err);
-                            }
-                            else {
-                                resolve();
-                            }
-                        });
-                    });
-                },
-            };
-
-            (response as any).expressResponse = res; // Hide the Express response so we can retreive it latyer.
-
-            await requestHandler(req, response);
+            await requestHandler(req, res);
 
             console.log(route, "GET handler done.")
         }));
@@ -402,8 +370,8 @@ class MicroService implements IMicroService {
     //
     // POST request stub
     //
-    post<RequestBodyT, ResponseT>(route: string, requestHandler: PostRequestHandlerFn<RequestBodyT, ResponseT>): void {
-        this.httpApp.post(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
+    post(route: string, requestHandler: PostRequestHandlerFn): void {
+        this.expressApp.post(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
             console.log("Handling POST", route);
             console.log(req.query);
             console.log("POST has not been implemented yet");
@@ -455,7 +423,7 @@ class MicroService implements IMicroService {
      * @param params Query parameters for the request.
      * @param toResponse The stream to pipe response to.
      */
-    forwardRequest<ResponseT>(serviceName: string, route: string, params: any, toResponse: IHttpResponse<ResponseT>): void {
+    forwardRequest(serviceName: string, route: string, params: any, toResponse: express.Response): void {
         let fullUrl = this.makeFullUrl(serviceName, route);
         const paramKeys = Object.keys(params);
         let firstKey = true;
@@ -481,7 +449,7 @@ class MicroService implements IMicroService {
      * @param dirPath The path to the directory that contains static files.
      */
     static(dirPath: string): void {
-        this.httpApp.use(express.static(dirPath));
+        this.expressApp.use(express.static(dirPath));
     }
 
     /**
@@ -489,6 +457,11 @@ class MicroService implements IMicroService {
      * This allows the logging from multiple microservices to be aggregated.
      */
     readonly log: ILog = new Log();
+
+    /**
+     * Reference to the express object.
+     */
+    readonly expressApp: express.Express;
     
     /**
      * Starts the microservice.
