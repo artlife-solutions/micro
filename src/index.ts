@@ -77,23 +77,15 @@ class Log implements ILog {
     }
 }
 
-
-export class ExchangeConfig implements IExchangeConfig {
-    name: string;
-    type: string;
-    routes: string[];
-
-    constructor (name?: string, type?: string, routes?: string[]) {
-        this.name = name || 'broadcast';
-        this.type = type || 'fanout';
-        if (routes && routes.length > 0) this.routes = routes
-        else this.routes = [ '#' ];
-    }
-}
-
 const defaultConfig: IMicroServiceConfig = {
 
 };
+
+const defaultExchange: IExchangeConfig = {
+    name: 'exchange',
+    type: 'fanout',
+    routes: [ '#' ],
+}
 
 //
 // Class that represents a particular microservice instance.
@@ -148,6 +140,7 @@ class MicroService implements IMicroService {
     //
     private async startHttpServer(): Promise<void> {
         return new Promise<void>((resolve, reject) => {
+            // @ts-ignore
             this.httpApp.listen(port, host, (err: any) => {
                 if (err) {
                     reject(err);
@@ -165,6 +158,7 @@ class MicroService implements IMicroService {
     //
     private async connectMessaging(): Promise<amqp.Connection> {
         return new Promise<amqp.Connection>((resolve, reject) => {
+            // @ts-ignore
             amqp.connect(messagingHost, (err, connection) => {
                 if (err) {
                     reject(err);
@@ -210,15 +204,15 @@ class MicroService implements IMicroService {
     //
     // Make sure a RabbitMQ queue exists before using it.
     //
-    private async assertQueue(queueName: string): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
-            console.log("Starting message queue: " + queueName); //todo:
-            this.messagingChannel!.assertQueue(queueName, {}, err => {
+    private async assertQueue(queueName?: string): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            this.messagingChannel!.assertQueue(queueName, {}, (err, q) => {
                 if (err) {
                     reject(err);
                 }
                 else {
-                    resolve();
+                    console.log("Starting message queue: " + q.queue);
+                    resolve(q.queue);
                 }
             })
         });
@@ -227,12 +221,15 @@ class MicroService implements IMicroService {
     //
     // Make sure a RabbitMQ exchange exists before using it.
     //
-    private async assertExchange(name: string, type: string): Promise<void> {
+    private async assertExchange(name: string, type: string = ''): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            console.log("Starting message exchange: " + name);
             this.messagingChannel!.assertExchange(name, type, {}, err => {
-                if (err) reject(err);
-                resolve();
+                if (err) {
+                    reject(err);
+                } else {
+                    console.log("Starting message exchange: " + name);
+                    resolve();
+                }
             });
         });
     }
@@ -247,7 +244,9 @@ class MicroService implements IMicroService {
      */
     async on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
         await this.startMessaging();
-        await this.assertQueue(eventName);
+        await this.assertExchange(eventName);
+        const queueName = await this.assertQueue(eventName);
+        this.messagingChannel!.bindQueue(queueName, eventName, '');
 
         const messagingChannel = this.messagingChannel!;
 
@@ -282,33 +281,34 @@ class MicroService implements IMicroService {
      */
     async emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void> {
         await this.startMessaging();
-        await this.assertQueue(eventName);
+        await this.assertExchange(eventName);
 
         console.log('sendMessage:'); //TODO: Logging.
         console.log("    " + eventName);
         console.log(eventArgs);
-        this.messagingChannel!.sendToQueue(eventName, new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?
+        this.messagingChannel!.publish(eventName, '', new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?
     }
 
     /**
      * Create a handler for listening to broadcasted messages on (optional) routes.
      * Implemented by Rabbitmq under the hood for reliable messaging.
      * 
+     * @param eventName The name of the event to emit.
      * @param exchangeConfig Exchange settings to broadcast to.
      * @param eventHandler Callback to be invoke when the incoming event is received.
      */
-    async listen<EventArgsT>(exchangeConfig: IExchangeConfig | null, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
-        const exchange = exchangeConfig || new ExchangeConfig();
+    async listen<EventArgsT>(eventName: string, exchangeConfig: IExchangeConfig, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
+        const exchange: IExchangeConfig = {
+            name: eventName,
+            type: exchangeConfig.type || defaultExchange.type,
+            routes: exchangeConfig.routes || defaultExchange.routes,
+        };
 
         await this.startMessaging();
         await this.assertExchange(exchange.name, exchange.type);
 
-        await this.messagingChannel!.assertQueue('', {}, (err, q) => {
-            if (err) reject(err);
-
-            exchange.routes.forEach(route => this.messagingChannel!.bindQueue(q.queue, exchange.name, route));
-            resolve();
-        });
+        const queueName = await this.assertQueue()
+        exchange.routes.forEach(route => this.messagingChannel!.bindQueue(queueName, exchange.name, route));
 
         const messagingChannel = this.messagingChannel!;
 
@@ -329,26 +329,34 @@ class MicroService implements IMicroService {
             console.log(exchange.name + " handler done."); //todo:
         };
 
-        console.log(`Recieving events on ${exchange.name}:${exchange.type} - ${exchange.routes.join(' ')}`); //todo:
+        console.log(`Recieving events on ${exchange.name}:${exchange.type} - ${exchange.routes}`); //todo:
 
         this.messagingChannel!.consume(exchange.name, asyncHandler(this, consumeCallback));
     }
 
     /**
-     * Emit a named outgoing event to an exchange on (optional) routes.
+     * Emit a named outgoing event to a configurable exchange.
      * Implemented by Rabbitmq under the hood for reliable messaging.
      * 
+     * @param eventName Name of event to emit
      * @param eventArgs Event args to publish with the event and be received at the other end.
      * @param exchangeConfig Exchange settings to broadcast to.
      */
-    async broadcast<EventArgsT>(exchangeConfig: IExchangeConfig | null, eventArgs: EventArgsT): Promise<void> {
+    async broadcast<EventArgsT>(eventName: string, eventArgs: EventArgsT, exchangeConfig: IExchangeConfig): Promise<void> {
         await this.startMessaging();
-        const exchange = exchangeConfig || new ExchangeConfig();
+        const exchange: IExchangeConfig = {
+            name: eventName,
+            type: exchangeConfig.type || defaultExchange.type,
+            routes: exchangeConfig.routes || defaultExchange.routes,
+        };
         await this.assertExchange(exchange.name, exchange.type);
 
-        console.log(`sendMessage to ${exchange.name} : ${exchange.type} - ${exchange.routes.join(' ')}`); //TODO: Logging.
-        console.log(eventArgs);
-        this.messagingChannel!.publish(exchange.name, exchange.routes.join(' '), new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?
+        exchange.routes.forEach(route => {
+            console.log(`sendMessage to ${exchange.name}:${exchange.type}-${route}`);
+            console.log(eventArgs);
+            this.messagingChannel!.publish(exchange.name, route, new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?    
+        });
+         //TODO: Logging.
     }
 
     /**
@@ -488,6 +496,7 @@ class MicroService implements IMicroService {
      */
     async start(): Promise<void> {
         if (argv.serviceMap) {
+            // @ts-ignore
             this.serviceMap = await readJsonFile(argv.serviceMap);
         }
 
