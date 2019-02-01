@@ -2,8 +2,8 @@
 // This is a simple example Microservice.
 //
 
-import { micro } from '../index';
-import { IMicroService } from '../index';
+import { micro, ExchangeConfig } from '../index';
+import { IMicroService } from '../index.d';
 
 //
 // Entry point for the microservice.
@@ -17,7 +17,7 @@ export async function main(service: IMicroService): Promise<void> {
     // The callback is wrapped for error handling, performance metrics and message tracing.
     // A bit like Express's post function.
     //
-    await service.on("do-some-work", async (args, res) => {
+    await service.on("do-some-work", async (args: any, res: any) => {
         //
         // ... do some work ...
         //
@@ -33,13 +33,17 @@ export async function main(service: IMicroService): Promise<void> {
         await res.ack(); 
     });
 
+    await service.listen(null, async (args: any, res: any) => {
+        await service.broadcast(null, { response: 'test' });
+    });
+
     //
     // Create a HTTP GET request handler for a particular route.
     // Do some work and return some json.
     // Under the hood this is handled by Express, but the callback is wrapped for 
     // error handling, performance metrics and request tracing.
     //
-    service.get('/another-end-point', async (req, res) => {
+    service.get('/another-end-point', async (req: any, res: any) => {
         //
         // ... do some work ...
         //
@@ -55,7 +59,7 @@ export async function main(service: IMicroService): Promise<void> {
     //
     // End points can be easily forwarded to internal services. 
     //
-    service.get('/another-end-point', async (req, res) => {
+    service.get('/another-end-point', async (req: any, res: any) => {
         //
         // Proxy the request to 'another-service'.
         //
