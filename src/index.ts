@@ -360,7 +360,7 @@ class MicroService implements IMicroService {
      */
     async emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void> {
         await this.startMessaging();
-        await this.messagingChannel!.assertExchange(eventName, "", {});
+        await this.messagingChannel!.assertExchange(eventName, "fanout", {});
 
         console.log('sendMessage:'); //TODO: Logging.
         console.log("    " + eventName);
