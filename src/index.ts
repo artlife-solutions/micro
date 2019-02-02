@@ -4,7 +4,7 @@
 
 import * as express from 'express';
 import { Express } from 'express';
-import * as amqp from 'amqplib/callback_api';
+import * as amqp from 'amqplib';
 import { argv } from 'yargs';
 import * as request from 'request';
 import * as requestPromise from 'request-promise';
@@ -50,27 +50,6 @@ export interface IMicroServiceConfig {
 }
 
 /**
- * Defines settings for an exchange
- */
-export interface IExchangeConfig {
-
-    /**
-     * Name of exchange
-     */
-    name: string;
-
-    /**
-     * Type of exchange
-     */
-    type: string;
-
-    /**
-     * Routes to publish/listen to
-     */
-    routes: string[];
-}
-
-/**
  * Interface for responding to events.
  */
 export interface IEventResponse {
@@ -106,9 +85,8 @@ export interface IMicroService {
      * 
      * @param eventName The name of the event to handle.
      * @param eventHandler Callback to be invoke when the incoming event is received.
-     * @param exchangeConfig Settings for exchange to listen on.
      */
-    on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>, exchangeConfig?: IExchangeConfig): Promise<void>;
+    on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void>;
 
     /**
      * Emit a named outgoing event.
@@ -116,29 +94,8 @@ export interface IMicroService {
      * 
      * @param eventName The name of the event to emit.
      * @param eventArgs Event args to publish with the event and be received at the other end.
-     * @param exchangeConfig Settings for exchange to listen on.
      */
-    emit<EventArgsT>(eventName: string, eventArgs: EventArgsT, exchangeConfig?: IExchangeConfig): Promise<void>;
-
-    /**
-     * Create a handler for listening to broadcasted messages on (optional) routes.
-     * Implemented by Rabbitmq under the hood for reliable messaging.
-     * 
-     * @param eventName The name of the event to emit.
-     * @param exchangeConfig Exchange settings to broadcast to.
-     * @param eventHandler Callback to be invoke when the incoming event is received.
-     */
-    listen<EventArgsT>(eventName: string, exchangeConfig: IExchangeConfig | null, eventHandler: EventHandlerFn<EventArgsT>): Promise<void>;
-
-    /**
-     * Emit a named outgoing event to an exchange on (optional) routes.
-     * Implemented by Rabbitmq under the hood for reliable messaging.
-     * 
-     * @param eventName The name of the event to emit.
-     * @param exchangeConfig Exchange settings to broadcast to.
-     * @param eventArgs Event args to publish with the event and be received at the other end.
-     */
-    broadcast<EventArgsT>(eventName: String, eventArgs: EventArgsT, exchangeConfig: IExchangeConfig): Promise<void>;
+    emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void>;
 
     /**
      * Create a handler for incoming HTTP GET requests.
@@ -198,7 +155,7 @@ interface StringMap {
 
 const host = argv.host || process.env.HOST || '0.0.0.0';
 const port = argv.port || process.env.PORT || 3000;
-const messagingHost = argv.message_host || process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
+const messagingHost = argv.message_host as string || process.env.MESSAGING_HOST as string || "amqp://guest:guest@localhost:5672";
 
 console.log("Host:      " + host);
 console.log("Port:      " + port);
@@ -249,12 +206,6 @@ class Log implements ILog {
 const defaultConfig: IMicroServiceConfig = {
 
 };
-
-const defaultExchange: IExchangeConfig = {
-    name: 'exchange',
-    type: 'fanout',
-    routes: [ '#' ],
-}
 
 //
 // Class that represents a particular microservice instance.
@@ -321,33 +272,14 @@ class MicroService implements IMicroService {
     // Connect to RabbitMQ.
     //
     private async connectMessaging(): Promise<amqp.Connection> {
-        return new Promise<amqp.Connection>((resolve, reject) => {
-            // @ts-ignore
-            amqp.connect(messagingHost, (err, connection) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(connection);
-                }
-            });
-        });
+        return await amqp.connect(messagingHost);
     }
 
     //
     // Create a RabbitMQ messaging channel.
     //
     private async createMessagingChannel(): Promise<amqp.Channel> {
-        return new Promise<amqp.Channel>((resolve, reject) => {
-            this.messagingConnection!.createChannel((err, channel) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(channel);
-                }
-            });
-        });
+        return await this.messagingConnection!.createChannel();
     }
         
     //
@@ -365,39 +297,22 @@ class MicroService implements IMicroService {
         
     }
 
+    /*fio:
     //
     // Make sure a RabbitMQ queue exists before using it.
     //
     private async assertQueue(queueName?: string): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            this.messagingChannel!.assertQueue(queueName, {}, (err, q) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    console.log("Starting message queue: " + q.queue);
-                    resolve(q.queue);
-                }
-            })
-        });
+        const response = await this.messagingChannel!.assertQueue(queueName!, {});
+        return response.queue;
     }
 
     //
     // Make sure a RabbitMQ exchange exists before using it.
     //
     private async assertExchange(name: string, type: string = ''): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
-            this.messagingChannel!.assertExchange(name, type, {}, err => {
-                if (err) {
-                    reject(err);
-                } else {
-                    console.log("Starting message exchange: " + name);
-                    resolve();
+        await this.messagingChannel!.assertExchange(name, type, {});
                 }
-            });
-        });
-    }
-    
+    */
 
     /**
      * Create a handler for a named incoming event.
@@ -408,9 +323,9 @@ class MicroService implements IMicroService {
      */
     async on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
         await this.startMessaging();
-        await this.assertExchange(eventName);
-        const queueName = await this.assertQueue(eventName);
-        this.messagingChannel!.bindQueue(queueName, eventName, '');
+        await this.messagingChannel!.assertExchange(eventName, "fanout", {});
+        await this.messagingChannel!.assertQueue(eventName, {});
+        this.messagingChannel!.bindQueue(eventName, eventName, '');
 
         const messagingChannel = this.messagingChannel!;
 
@@ -445,82 +360,12 @@ class MicroService implements IMicroService {
      */
     async emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void> {
         await this.startMessaging();
-        await this.assertExchange(eventName);
+        await this.messagingChannel!.assertExchange(eventName, "", {});
 
         console.log('sendMessage:'); //TODO: Logging.
         console.log("    " + eventName);
         console.log(eventArgs);
         this.messagingChannel!.publish(eventName, '', new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?
-    }
-
-    /**
-     * Create a handler for listening to broadcasted messages on (optional) routes.
-     * Implemented by Rabbitmq under the hood for reliable messaging.
-     * 
-     * @param eventName The name of the event to emit.
-     * @param exchangeConfig Exchange settings to broadcast to.
-     * @param eventHandler Callback to be invoke when the incoming event is received.
-     */
-    async listen<EventArgsT>(eventName: string, exchangeConfig: IExchangeConfig, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
-        const exchange: IExchangeConfig = {
-            name: eventName,
-            type: exchangeConfig.type || defaultExchange.type,
-            routes: exchangeConfig.routes || defaultExchange.routes,
-        };
-
-        await this.startMessaging();
-        await this.assertExchange(exchange.name, exchange.type);
-
-        const queueName = await this.assertQueue()
-        exchange.routes.forEach(route => this.messagingChannel!.bindQueue(queueName, exchange.name, route));
-
-        const messagingChannel = this.messagingChannel!;
-
-        async function consumeCallback(msg: amqp.Message): Promise<void> {
-            console.log("Handling " + exchange.name); //TODO: Logging.
-
-            const args = JSON.parse(msg.content.toString())
-            console.log(args); //TODO:
-
-            const eventResponse: IEventResponse = {
-                async ack(): Promise<void> {
-                    messagingChannel.ack(msg);
-                }
-            }
-
-            await eventHandler(args, eventResponse);
-
-            console.log(exchange.name + " handler done."); //todo:
-        };
-
-        console.log(`Recieving events on ${exchange.name}:${exchange.type} - ${exchange.routes}`); //todo:
-
-        this.messagingChannel!.consume(exchange.name, asyncHandler(this, consumeCallback));
-    }
-
-    /**
-     * Emit a named outgoing event to a configurable exchange.
-     * Implemented by Rabbitmq under the hood for reliable messaging.
-     * 
-     * @param eventName Name of event to emit
-     * @param eventArgs Event args to publish with the event and be received at the other end.
-     * @param exchangeConfig Exchange settings to broadcast to.
-     */
-    async broadcast<EventArgsT>(eventName: string, eventArgs: EventArgsT, exchangeConfig: IExchangeConfig): Promise<void> {
-        await this.startMessaging();
-        const exchange: IExchangeConfig = {
-            name: eventName,
-            type: exchangeConfig.type || defaultExchange.type,
-            routes: exchangeConfig.routes || defaultExchange.routes,
-        };
-        await this.assertExchange(exchange.name, exchange.type);
-
-        exchange.routes.forEach(route => {
-            console.log(`sendMessage to ${exchange.name}:${exchange.type}-${route}`);
-            console.log(eventArgs);
-            this.messagingChannel!.publish(exchange.name, route, new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?    
-        });
-         //TODO: Logging.
     }
 
     /**
