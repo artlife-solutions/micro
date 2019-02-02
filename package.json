@@ -1,6 +1,6 @@
 {
     "name": "@artlife/micro",
-    "version": "0.0.18",
+    "version": "0.0.19",
     "description": "A tiny and very opinionated microservices framework inspired by expressjs.",
     "main": "build/index.js",
     "types": "build/index.d.ts",
@@ -12,7 +12,7 @@
         "clean-build:watch": "rm -rf build/* && tsc --watch",
         "test": "nyc mocha --opts ./src/test/mocha.opts",
         "test:watch": "nyc mocha --watch --watch-extensions ts --opts ./src/test/mocha.opts",
-        "prepublishOnly": "tsc"
+        "prepublishOnly": "npm run clean && tsc"
     },
     "repository": {
         "type": "git",
