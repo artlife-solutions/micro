@@ -297,23 +297,6 @@ class MicroService implements IMicroService {
         
     }
 
-    /*fio:
-    //
-    // Make sure a RabbitMQ queue exists before using it.
-    //
-    private async assertQueue(queueName?: string): Promise<string> {
-        const response = await this.messagingChannel!.assertQueue(queueName!, {});
-        return response.queue;
-    }
-
-    //
-    // Make sure a RabbitMQ exchange exists before using it.
-    //
-    private async assertExchange(name: string, type: string = ''): Promise<void> {
-        await this.messagingChannel!.assertExchange(name, type, {});
-                }
-    */
-
     /**
      * Create a handler for a named incoming event.
      * Implemented by Rabbitmq under the hood for reliable messaging.
@@ -464,6 +447,7 @@ class MicroService implements IMicroService {
      * @param dirPath The path to the directory that contains static files.
      */
     static(dirPath: string): void {
+        console.log("Serving static files from " + dirPath);
         this.expressApp.use(express.static(dirPath));
     }
 
