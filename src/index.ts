@@ -455,8 +455,7 @@ class MicroService implements IMicroService {
 
         console.log(">> " + fullUrl); //TODO:
 
-        const expressResponse = (toResponse as any).expressResponse as express.Response;
-        request(fullUrl).pipe(expressResponse);
+        request(fullUrl).pipe(toResponse);
     }
 
     /**
