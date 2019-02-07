@@ -63,6 +63,20 @@ export interface ITimer {
 }
 
 /**
+ * Interface for a service to output metrics.
+ */
+export interface IMetrics {
+
+    /**
+     * Output a named number value.
+     * 
+     * @param name The name of the metric.
+     * @param value The value of the metric.
+     */
+    numberMetric(name: string, value: number): void;
+}
+
+/**
  * Configures a microservice.
  */
 export interface IMicroServiceConfig {
@@ -158,9 +172,16 @@ export interface IMicroService {
 
     /**
      * Reference to the timer interface.
-     * Allows code to be timed for performance.
+     * Allows a service to time code for performance.
      */
     readonly timer: ITimer;
+
+    /**
+     * Reference to the metrics interface.
+     * Allows a service to output metrics.
+     */
+    readonly metrics: IMetrics;
+
 
     /**
      * Reference to the express object.
@@ -497,6 +518,16 @@ class MicroService implements IMicroService {
             // Just a stub for the moment.
         },
     };
+
+    /**
+     * Reference to the metrics interface.
+     * Allows a service to output metrics.
+     */
+    readonly metrics: IMetrics = {
+        numberMetric: (name: string, value: number): void => {
+            // Just a stub for the moment.
+        },
+    }; 
 
     /**
      * Reference to the express object.
