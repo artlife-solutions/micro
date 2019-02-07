@@ -43,6 +43,26 @@ export interface ILog {
 }
 
 /**
+ * Interface used to time various events.
+ */
+export interface ITimer {
+
+    /**
+     * Start a timer.
+     * 
+     * @param timerName The name of the timer.
+     */
+    start(timerName: string): void;
+
+    /**
+     * Stop a timer.
+     * 
+     * @param timerName The name of the timer.
+     */
+    stop(timerName: string): void;
+}
+
+/**
  * Configures a microservice.
  */
 export interface IMicroServiceConfig {
@@ -135,6 +155,12 @@ export interface IMicroService {
      * This allows the logging from multiple microservices to be aggregated.
      */
     readonly log: ILog;
+
+    /**
+     * Reference to the timer interface.
+     * Allows code to be timed for performance.
+     */
+    readonly timer: ITimer;
 
     /**
      * Reference to the express object.
@@ -456,6 +482,21 @@ class MicroService implements IMicroService {
      * This allows the logging from multiple microservices to be aggregated.
      */
     readonly log: ILog = new Log();
+
+
+    /**
+     * Reference to the timer interface.
+     * Allows code to be timed for performance.
+     */
+    readonly timer: ITimer = {
+        start: (timerName: string): void => {
+            // Just a stub for the moment.
+        },
+
+        stop: (timerName: string): void => {
+            // Just a stub for the moment.
+        },
+    };
 
     /**
      * Reference to the express object.
