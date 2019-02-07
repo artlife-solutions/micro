@@ -73,7 +73,7 @@ export interface IMetrics {
      * @param name The name of the metric.
      * @param value The value of the metric.
      */
-    discreteMetric(name: string, value: number): void;
+    discrete(name: string, value: number): void;
 
     /**
      * Output a continous metric value.
@@ -81,7 +81,7 @@ export interface IMetrics {
      * @param name The name of the metric.
      * @param value The value of the metric.
      */
-    continousMetric(name: string, value: number): void;
+    continuous(name: string, value: number): void;
 }
 
 /**
@@ -532,11 +532,11 @@ class MicroService implements IMicroService {
      * Allows a service to output metrics.
      */
     readonly metrics: IMetrics = {
-        discreteMetric: (name: string, value: number): void => {
+        discrete: (name: string, value: number): void => {
             // Just a stub for the moment.
         },
 
-        continousMetric: (name: string, value: number): void => {
+        continuous: (name: string, value: number): void => {
             // Just a stub for the moment.
         },
     }; 
