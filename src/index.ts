@@ -166,6 +166,17 @@ export interface IMicroService {
     forwardRequest<RequestBodyT, ResponseT>(serviceName: string, route: string, body: RequestBodyT, response: express.Response): void;
 
     /**
+     * Forward HTTP get request to another named service.
+     * The response from the forward requests is automatically piped into the passed in response.
+     * 
+     * @param serviceName The name of the service to forward the request to.
+     * @param route The HTTP GET route to forward to.
+     * @param params Query parameters for the request.
+     * @param res The stream to pipe response to.
+     */
+    forwardRequest2(serviceName: string, route: string, params: any, req: express.Request, res: express.Response): void;
+
+    /**
      * Setup serving of static files.
      * 
      * @param dirPath The path to the directory that contains static files.
@@ -480,7 +491,7 @@ class MicroService implements IMicroService {
      * @param params Query parameters for the request.
      * @param toResponse The stream to pipe response to.
      */
-    forwardRequest(serviceName: string, route: string, params: any, toResponse: express.Response): void {
+    forwardRequest(serviceName: string, route: string, params: any, toResponse: express.Response): void { //TODO: Get rid of this version.
         let fullUrl = this.makeFullUrl(serviceName, route);
         const paramKeys = Object.keys(params);
         let firstKey = true;
@@ -498,6 +509,35 @@ class MicroService implements IMicroService {
 
         request(fullUrl).pipe(toResponse);
     }
+
+    /**
+     * Forward HTTP get request to another named service.
+     * The response from the forward requests is automatically piped into the passed in response.
+     * 
+     * @param serviceName The name of the service to forward the request to.
+     * @param route The HTTP GET route to forward to.
+     * @param params Query parameters for the request.
+     * @param res The stream to pipe response to.
+     */
+    forwardRequest2(serviceName: string, route: string, params: any, req: express.Request, res: express.Response): void {
+        let fullUrl = this.makeFullUrl(serviceName, route);
+        const paramKeys = Object.keys(params);
+        let firstKey = true;
+        for (let keyIndex = 0; keyIndex < paramKeys.length; ++keyIndex) {
+            const key = paramKeys[keyIndex];
+            const value = params[key];
+            if (value) {
+                fullUrl += firstKey ? "?" : "&"
+                fullUrl += key + "=" + value;
+                firstKey = false;
+            }
+        }
+
+        console.log(">> " + fullUrl); //TODO:
+
+        req.pipe(request(fullUrl)).pipe(res);
+    }
+    
 
     /**
      * Setup serving of static files.
