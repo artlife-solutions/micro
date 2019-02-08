@@ -428,7 +428,10 @@ class MicroService implements IMicroService {
         this.expressApp.post(route, asyncHandler(this, "HTTP POST " + route, async (req: express.Request, res: express.Response) => {
             console.log("Handling POST", route);
             console.log(req.query);
-            console.log("POST has not been implemented yet");
+
+            await requestHandler(req, res);
+
+            console.log(route, "POST handler done.")
         }));
     }
 
