@@ -386,7 +386,7 @@ class MicroService implements IMicroService {
 
         console.log("Recieving events on queue " + eventName); //todo:
 
-        this.messagingChannel!.consume(eventName, asyncHandler(this, consumeCallback));
+        this.messagingChannel!.consume(eventName, asyncHandler(this, "ASYNC: " + eventName, consumeCallback));
     }
 
     /**
@@ -411,7 +411,7 @@ class MicroService implements IMicroService {
      * Implemented by Express under the hood.
      */
     get(route: string, requestHandler: GetRequestHandlerFn): void {
-        this.expressApp.get(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
+        this.expressApp.get(route, asyncHandler(this, "HTTP GET " + route, async (req: express.Request, res: express.Response) => {
             console.log("Handling GET", route); //TODO: Proper optional logging.
             console.log(req.query);
 
@@ -425,7 +425,7 @@ class MicroService implements IMicroService {
     // POST request stub
     //
     post(route: string, requestHandler: PostRequestHandlerFn): void {
-        this.expressApp.post(route, asyncHandler(this, async (req: express.Request, res: express.Response) => {
+        this.expressApp.post(route, asyncHandler(this, "HTTP POST " + route, async (req: express.Request, res: express.Response) => {
             console.log("Handling POST", route);
             console.log(req.query);
             console.log("POST has not been implemented yet");
