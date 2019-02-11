@@ -315,7 +315,9 @@ class MicroService implements IMicroService {
         // this.expressApp.use(bodyParser.json());
 
         if (!inProduction) {
-            morganBody(this.expressApp);
+            morganBody(this.expressApp, {
+                noColors: true,
+            });
         }
         
         this.expressApp.get("/is-alive", (req, res) => {
