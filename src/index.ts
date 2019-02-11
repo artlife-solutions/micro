@@ -11,6 +11,9 @@ import * as requestPromise from 'request-promise';
 import { readJsonFile } from './file';
 import { asyncHandler, retry } from './utils';
 import { reject, resolve } from 'bluebird';
+const morganBody = require('morgan-body');
+
+const inProduction = process.env.NODE_ENV === "production";
 
 /**
  * Logging interface. Allows log from multiple microservices to be aggregated.
@@ -310,6 +313,10 @@ class MicroService implements IMicroService {
         
         // this.expressApp.use(bodyParser.urlencoded({ extended: false }));
         // this.expressApp.use(bodyParser.json());
+
+        if (!inProduction) {
+            morganBody(this.expressApp);
+        }
         
         this.expressApp.get("/is-alive", (req, res) => {
             res.json({ ok: true });
