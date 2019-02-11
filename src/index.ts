@@ -373,8 +373,9 @@ class MicroService implements IMicroService {
     async on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
         await this.startMessaging();
         await this.messagingChannel!.assertExchange(eventName, "fanout", {});
-        await this.messagingChannel!.assertQueue(eventName, {});
-        this.messagingChannel!.bindQueue(eventName, eventName, '');
+        const queueName = (await this.messagingChannel!.assertQueue("", {})).queue;
+        console.log('binding queue', queueName, 'to', eventName);
+        this.messagingChannel!.bindQueue(queueName, eventName, "");
 
         const messagingChannel = this.messagingChannel!;
 
@@ -397,7 +398,7 @@ class MicroService implements IMicroService {
 
         console.log("Recieving events on queue " + eventName); //todo:
 
-        this.messagingChannel!.consume(eventName, asyncHandler(this, "ASYNC: " + eventName, consumeCallback));
+        this.messagingChannel!.consume(queueName, asyncHandler(this, "ASYNC: " + eventName, consumeCallback));
     }
 
     /**
@@ -409,7 +410,7 @@ class MicroService implements IMicroService {
      */
     async emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void> {
         await this.startMessaging();
-        await this.messagingChannel!.assertExchange(eventName, "fanout", {});
+        await this.messagingChannel!.assertExchange(eventName, "fanout");
 
         console.log('sendMessage:'); //TODO: Logging.
         console.log("    " + eventName);
@@ -602,6 +603,16 @@ class MicroService implements IMicroService {
         await this.startHttpServer();
     }
 }
+
+process.on('uncaughtException', err => {
+    console.error("!!!!!!!!!!!!!!!! Micro caught an unhandled exception!!")
+    console.log(err && err.stack || err);
+});
+
+process.on('unhandledRejection', err => {
+    console.error("!!!!!!!!!!!!!!!! Micro caught an unhandled promise rejection!!")
+    console.log(err && err.stack || err);
+});
 
 /**
  * Instantiates a microservice.
