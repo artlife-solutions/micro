@@ -613,16 +613,6 @@ class MicroService implements IMicroService {
     }
 }
 
-process.on('uncaughtException', err => {
-    console.error("!!!!!!!!!!!!!!!! Micro caught an unhandled exception!!")
-    console.log(err && err.stack || err);
-});
-
-process.on('unhandledRejection', err => {
-    console.error("!!!!!!!!!!!!!!!! Micro caught an unhandled promise rejection!!")
-    console.log(err && err.stack || err);
-});
-
 /**
  * Instantiates a microservice.
  * 
