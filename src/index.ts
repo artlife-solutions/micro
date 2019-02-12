@@ -131,7 +131,7 @@ export interface IMicroService {
      * @param eventName The name of the event to handle.
      * @param eventHandler Callback to be invoke when the incoming event is received.
      */
-    on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void>;
+    on<EventArgsT = any>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void>;
 
     /**
      * Emit a named outgoing event.
@@ -140,7 +140,7 @@ export interface IMicroService {
      * @param eventName The name of the event to emit.
      * @param eventArgs Event args to publish with the event and be received at the other end.
      */
-    emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void>;
+    emit<EventArgsT = any>(eventName: string, eventArgs: EventArgsT): Promise<void>;
 
     /**
      * Create a handler for incoming HTTP GET requests.
@@ -379,7 +379,7 @@ class MicroService implements IMicroService {
      * @param eventName The name of the event to handle.
      * @param eventHandler Callback to be invoke when the incoming event is received.
      */
-    async on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
+    async on<EventArgsT = any>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
         await this.startMessaging();
         await this.messagingChannel!.assertExchange(eventName, "fanout", {});
         const queueName = (await this.messagingChannel!.assertQueue("", {})).queue;
@@ -417,7 +417,7 @@ class MicroService implements IMicroService {
      * @param eventName The name of the event to emit.
      * @param eventArgs Event args to publish with the event and be received at the other end.
      */
-    async emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void> {
+    async emit<EventArgsT = any>(eventName: string, eventArgs: EventArgsT): Promise<void> {
         await this.startMessaging();
         await this.messagingChannel!.assertExchange(eventName, "fanout");
 
