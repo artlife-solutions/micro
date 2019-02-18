@@ -1,6 +1,6 @@
 {
     "name": "@artlife/micro",
-    "version": "0.0.34",
+    "version": "0.0.37",
     "description": "A tiny and very opinionated microservices framework inspired by expressjs.",
     "main": "build/index.js",
     "types": "build/index.d.ts",
@@ -32,8 +32,7 @@
         "moment": "2.22.2",
         "morgan-body": "^2.4.5",
         "request": "^2.88.0",
-        "request-promise": "^4.2.2",
-        "yargs": "^12.0.2"
+        "request-promise": "^4.2.2"
     },
     "devDependencies": {
         "@types/amqplib": "^0.5.8",

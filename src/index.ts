@@ -5,7 +5,6 @@
 import * as express from 'express';
 import { Express } from 'express';
 import * as amqp from 'amqplib';
-import { argv } from 'yargs';
 import * as request from 'request';
 import * as requestPromise from 'request-promise';
 import { readJsonFile } from './file';
@@ -125,6 +124,11 @@ export type PostRequestHandlerFn = (request: express.Request, response: express.
 export interface IMicroService {
 
     /**
+     * Returns true if the messaging system is currently available.
+     */
+    isMessagingAvailable(): boolean;
+
+    /**
      * Create a handler for a named incoming event from a direct queue.
      * Implemented by Rabbitmq under the hood for reliable messaging.
      * 
@@ -222,9 +226,10 @@ interface StringMap {
     [index: string]: string;
 }
 
-const host = argv.host || process.env.HOST || '0.0.0.0';
-const port = argv.port || process.env.PORT || 3000;
-const messagingHost = argv.message_host as string || process.env.MESSAGING_HOST as string || "amqp://guest:guest@localhost:5672";
+//TODO: These should be passed into micro via options if necessary.
+const host = process.env.HOST || '0.0.0.0';
+const port = (process.env.PORT && parseInt(process.env.PORT)) || 3000;
+const messagingHost = process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
 
 console.log("Host:      " + host);
 console.log("Port:      " + port);
@@ -277,6 +282,14 @@ const defaultConfig: IMicroServiceConfig = {
 };
 
 //
+// Used to register an event handler to be setup after messaging system has started.
+//
+interface IEventHandler {
+    eventName: string;
+    eventHandler: EventHandlerFn<any>;
+}
+
+//
 // Class that represents a particular microservice instance.
 //
 class MicroService implements IMicroService {
@@ -297,9 +310,10 @@ class MicroService implements IMicroService {
     private config: IMicroServiceConfig;
 
     //
-    // Maps services to host name.
-    //
-    private serviceMap: StringMap = {};
+    // Event handlers that have been registered to be setup once
+    // connection to message queue is established.
+    ///
+    private registeredEventHandlers: IEventHandler[] = [];
 
     constructor(config?: IMicroServiceConfig) {
         this.config = config || defaultConfig;
@@ -330,7 +344,6 @@ class MicroService implements IMicroService {
     //
     private async startHttpServer(): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            // @ts-ignore
             this.expressApp.listen(port, host, (err: any) => {
                 if (err) {
                     reject(err);
@@ -342,45 +355,57 @@ class MicroService implements IMicroService {
             });
         });
     }
-
-    //
-    // Connect to RabbitMQ.
-    //
-    private async connectMessaging(): Promise<amqp.Connection> {
-        return await amqp.connect(messagingHost);
-    }
-
-    //
-    // Create a RabbitMQ messaging channel.
-    //
-    private async createMessagingChannel(): Promise<amqp.Channel> {
-        return await this.messagingConnection!.createChannel();
-    }
         
     //
     // Lazily start RabbitMQ messaging.
     //
     private async startMessaging(): Promise<void> {
-        if (!this.messagingChannel) {
-            console.log("Lazily initiating messaging system."); //todo:
-            this.messagingConnection = await retry(() => this.connectMessaging(), 3, 1000);
-            this.messagingChannel = await this.createMessagingChannel();
+
+        const initMessaging = async (): Promise<void> => {
+            this.messagingConnection = await retry(async () => await amqp.connect(messagingHost), 10000, 1000);
         
-            //todo:
-            // await connection.close();
+            this.messagingConnection.on("error", err => {
+                console.error("Error from message system.");
+                console.error(err && err.stack || err);
+            });
+
+            this.messagingConnection.on("close", err => {
+                this.messagingConnection = undefined;
+                this.messagingChannel = undefined;
+                console.log("Lost connection to rabbit, waiting for restart.");
+                initMessaging()
+                    .then(() => console.log("Restarted messaging."))
+                    .catch(err => {
+                        console.error("Failed to restart messaging.");
+                        console.error(err && err.stack || err);
+                    });
+            });
+            
+            this.messagingChannel = await this.messagingConnection!.createChannel();
+
+            for (const registeredEventHandler of this.registeredEventHandlers) {
+                await this.internalOn(registeredEventHandler.eventName, registeredEventHandler.eventHandler);
+            }
         }
-        
+
+        await initMessaging();
+    
+        //todo:
+        // await connection.close();
     }
 
     /**
-     * Create a handler for a named incoming event.
-     * Implemented by Rabbitmq under the hood for reliable messaging.
-     * 
-     * @param eventName The name of the event to handle.
-     * @param eventHandler Callback to be invoke when the incoming event is received.
+     * Returns true if the messaging system is currently available.
      */
-    async on<EventArgsT = any>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
-        await this.startMessaging();
+    isMessagingAvailable(): boolean {
+        return !!this.messagingConnection;
+    }
+
+    //
+    // Internal message handler setup.
+    //
+    private async internalOn(eventName: string, eventHandler: EventHandlerFn<any>): Promise<void> {
+
         await this.messagingChannel!.assertExchange(eventName, "fanout", {});
         const queueName = (await this.messagingChannel!.assertQueue("", {})).queue;
         console.log('binding queue', queueName, 'to', eventName);
@@ -405,9 +430,31 @@ class MicroService implements IMicroService {
             console.log(eventName + " handler done."); //todo:
         };
 
-        console.log("Recieving events on queue " + eventName); //todo:
+        console.log("Receiving events on queue " + eventName); //todo:
 
         this.messagingChannel!.consume(queueName, asyncHandler(this, "ASYNC: " + eventName, consumeCallback));
+    }
+    
+    /**
+     * Create a handler for a named incoming event.
+     * Implemented by Rabbitmq under the hood for reliable messaging.
+     * 
+     * @param eventName The name of the event to handle.
+     * @param eventHandler Callback to be invoke when the incoming event is received.
+     */
+    async on<EventArgsT = any>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
+        
+        this.registeredEventHandlers.push({
+            eventName: eventName,
+            eventHandler: eventHandler,
+        });
+
+        if (this.messagingConnection) {
+            //
+            // Message system already started.
+            //
+            await this.internalOn(eventName, eventHandler);
+        }
     }
 
     /**
@@ -418,7 +465,10 @@ class MicroService implements IMicroService {
      * @param eventArgs Event args to publish with the event and be received at the other end.
      */
     async emit<EventArgsT = any>(eventName: string, eventArgs: EventArgsT): Promise<void> {
-        await this.startMessaging();
+        if (!this.messagingConnection) {
+            throw new Error("Messaging system currently unavailable.");
+        }
+
         await this.messagingChannel!.assertExchange(eventName, "fanout");
 
         console.log('sendMessage:'); //TODO: Logging.
@@ -460,8 +510,7 @@ class MicroService implements IMicroService {
     // Create a full URL for a service request mapping the service name to host name if necessary.
     //
     makeFullUrl(serviceName: string, route: string) {
-        const hostName = this.serviceMap[serviceName] || "http://" + serviceName;
-        return hostName + route;
+        return "http://" + serviceName + route;
     }
     
     /**
@@ -604,12 +653,9 @@ class MicroService implements IMicroService {
      * It starts listening for incoming HTTP requests and events.
      */
     async start(): Promise<void> {
-        if (argv.serviceMap) {
-            // @ts-ignore
-            this.serviceMap = await readJsonFile(argv.serviceMap);
-        }
-
         await this.startHttpServer();
+
+        await this.startMessaging(); //TODO: Would be good to optionally enable this.
     }
 }
 
