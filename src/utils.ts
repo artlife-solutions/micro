@@ -41,9 +41,9 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
         }
         catch (err) {
             if (maxAttempts >= 1) {
-                console.error("Operation failed, will retry.");
-                console.error("Error:");
-                console.error(err && err.stack || err);
+                //console.error("Operation failed, will retry.");
+                //console.error("Error:");
+                //console.error(err && err.stack || err);
             }
             else {
                 console.error("Operation failed, no more retries allowed.");
