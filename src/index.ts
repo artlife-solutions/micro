@@ -11,6 +11,7 @@ import { readJsonFile } from './file';
 import { asyncHandler, retry } from './utils';
 import { reject, resolve } from 'bluebird';
 const morganBody = require('morgan-body');
+import * as http from 'http';
 
 const inProduction = process.env.NODE_ENV === "production";
 
@@ -215,6 +216,11 @@ export interface IMicroService {
     readonly expressApp: express.Express;
 
     /**
+     * Reference to the HTTP server.
+     */
+    readonly httpServer: http.Server;
+    
+    /**
      * Starts the microservice.
      * It starts listening for incoming HTTP requests and events.
      */
@@ -318,6 +324,7 @@ class MicroService implements IMicroService {
     constructor(config?: IMicroServiceConfig) {
         this.config = config || defaultConfig;
         this.expressApp = express();
+        this.httpServer = new http.Server(this.expressApp);
 
         this.expressApp.use((req, res, next) => { //TODO: Only for testing! Remove this in prod.
             res.header("Access-Control-Allow-Origin", "*");
@@ -344,7 +351,7 @@ class MicroService implements IMicroService {
     //
     private async startHttpServer(): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            this.expressApp.listen(port, host, (err: any) => {
+            this.httpServer.listen(port, host, (err: any) => {
                 if (err) {
                     reject(err);
                 }
@@ -406,8 +413,11 @@ class MicroService implements IMicroService {
     //
     private async internalOn(eventName: string, eventHandler: EventHandlerFn<any>): Promise<void> {
 
-        await this.messagingChannel!.assertExchange(eventName, "fanout", {});
-        const queueName = (await this.messagingChannel!.assertQueue("", {})).queue;
+        // http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertExchange
+        await this.messagingChannel!.assertExchange(eventName, "fanout", { durable: true });
+
+        // http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertQueue
+        const queueName = (await this.messagingChannel!.assertQueue("", { durable: true, exclusive: true })).queue;
         console.log('binding queue', queueName, 'to', eventName);
         this.messagingChannel!.bindQueue(queueName, eventName, "");
 
@@ -432,7 +442,14 @@ class MicroService implements IMicroService {
 
         console.log("Receiving events on queue " + eventName); //todo:
 
-        this.messagingChannel!.consume(queueName, asyncHandler(this, "ASYNC: " + eventName, consumeCallback));
+        // http://www.squaremobius.net/amqp.node/channel_api.html#channel_consume   
+        this.messagingChannel!.consume(
+            queueName, 
+            asyncHandler(this, "ASYNC: " + eventName, consumeCallback),
+            {
+                noAck: false,
+            }
+        );
     }
     
     /**
@@ -469,12 +486,22 @@ class MicroService implements IMicroService {
             throw new Error("Messaging system currently unavailable.");
         }
 
-        await this.messagingChannel!.assertExchange(eventName, "fanout");
+        // http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertExchange
+        await this.messagingChannel!.assertExchange(eventName, "fanout", { durable: true, });
 
         console.log('sendMessage:'); //TODO: Logging.
         console.log("    " + eventName);
         console.log(eventArgs);
-        this.messagingChannel!.publish(eventName, '', new Buffer(JSON.stringify(eventArgs))); //TODO: Probably a more efficient way to do this! Maybe BSON?
+
+        // http://www.squaremobius.net/amqp.node/channel_api.html#channel_publish
+        this.messagingChannel!.publish(
+            eventName, 
+            '', 
+            new Buffer(JSON.stringify(eventArgs)),
+            {
+                persistent: true,
+            }
+        ); //TODO: Probably a more efficient way to do this! Maybe BSON?
     }
 
     /**
@@ -647,6 +674,11 @@ class MicroService implements IMicroService {
      * Reference to the express object.
      */
     readonly expressApp: express.Express;
+
+    /**
+     * Reference to the HTTP server.
+     */
+    readonly httpServer: http.Server;
     
     /**
      * Starts the microservice.
