@@ -1,6 +1,6 @@
 {
     "name": "@artlife/micro",
-    "version": "0.0.41",
+    "version": "0.0.42",
     "description": "A tiny and very opinionated microservices framework inspired by expressjs.",
     "main": "build/index.js",
     "types": "build/index.d.ts",

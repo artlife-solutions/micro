@@ -164,6 +164,15 @@ export interface IMicroService {
     post(route: string, requestHandler: PostRequestHandlerFn): void;
 
     /**
+     * Make a request to another service.
+     * 
+     * @param serviceName The name (logical or host) of the service.
+     * @param route The HTTP route on the service to make the request to.
+     * @param params Query parameters for the request.
+     */
+    request(serviceName: string, route: string, params?: any): Promise<any>;
+
+    /**
      * Forward HTTP get request to another named service.
      * The response from the forward requests is automatically piped into the passed in response.
      * 
@@ -548,7 +557,7 @@ class MicroService implements IMicroService {
      * @param route The HTTP route on the service to make the request to.
      * @param params Query parameters for the request.
      */
-    async request(serviceName: string, route: string, params?: any) {
+    async request(serviceName: string, route: string, params?: any): Promise<any> {
         let fullUrl = this.makeFullUrl(serviceName, route);
         if (params) {
             const paramKeys = Object.keys(params);
