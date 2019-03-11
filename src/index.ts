@@ -15,6 +15,7 @@ const morganBody = require('morgan-body');
 import * as http from 'http';
 
 const inProduction = process.env.NODE_ENV === "production";
+const enableMorgan = !inProduction || process.env.ENABLE_MORGAN === "true";
 
 /**
  * Logging interface. Allows log from multiple microservices to be aggregated.
@@ -519,28 +520,42 @@ class MicroService implements IMicroService {
      * Implemented by Express under the hood.
      */
     get(route: string, requestHandler: GetRequestHandlerFn): void {
-        this.expressApp.get(route, asyncHandler(this, "HTTP GET " + route, async (req: express.Request, res: express.Response) => {
+        this.expressApp.get(route, (req: express.Request, res: express.Response) => {
             console.log("Handling GET", route); //TODO: Proper optional logging.
             console.log(req.query);
 
-            await requestHandler(req, res);
+            requestHandler(req, res)
+                .then(() => {
+                    console.log(`HTTP GET handler for ${route} finished.`);
+                })
+                .catch(err => {
+                    console.error("Error from handler: HTTP GET " + route);
+                    console.error(err && err.stack || err);
 
-            console.log(route, "GET handler done.")
-        }));
+                    res.sendStatus(500);
+                });
+        });
     }
 
     //
     // POST request stub
     //
     post(route: string, requestHandler: PostRequestHandlerFn): void {
-        this.expressApp.post(route, asyncHandler(this, "HTTP POST " + route, async (req: express.Request, res: express.Response) => {
+        this.expressApp.post(route, (req: express.Request, res: express.Response) => {
             console.log("Handling POST", route);
             console.log(req.query);
 
-            await requestHandler(req, res);
+            requestHandler(req, res)
+                .then(() => {
+                    console.log(`HTTP POST handler for ${route} finished.`);
+                })
+                .catch(err => {
+                    console.error("Error from handler: HTTP POST " + route);
+                    console.error(err && err.stack || err);
 
-            console.log(route, "POST handler done.")
-        }));
+                    res.sendStatus(500);
+                });
+        });
     }
 
     //
