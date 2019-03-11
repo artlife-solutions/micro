@@ -347,6 +347,7 @@ class MicroService implements IMicroService {
         // this.expressApp.use(bodyParser.json());
 
         if (enableMorgan) {
+            console.log("Enabling Morgan request tracing.");
             morganBody(this.expressApp, {
                 noColors: true,
             });
