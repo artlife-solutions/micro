@@ -346,7 +346,7 @@ class MicroService implements IMicroService {
         // this.expressApp.use(bodyParser.urlencoded({ extended: false }));
         // this.expressApp.use(bodyParser.json());
 
-        if (!inProduction) {
+        if (enableMorgan) {
             morganBody(this.expressApp, {
                 noColors: true,
             });
