@@ -436,10 +436,10 @@ class MicroService implements IMicroService {
         const messagingChannel = this.messagingChannel!;
 
         async function consumeCallback(msg: amqp.Message): Promise<void> {
-            console.log("Handling " + eventName); //TODO: Logging.
+            //console.log("Handling " + eventName); //TODO: Logging.
 
             const args = JSON.parse(msg.content.toString())
-            console.log(args); //TODO:
+            //console.log(args); //TODO:
 
             const eventResponse: IEventResponse = {
                 async ack(): Promise<void> {
@@ -449,7 +449,7 @@ class MicroService implements IMicroService {
 
             await eventHandler(args, eventResponse);
 
-            console.log(eventName + " handler done."); //todo:
+            //console.log(eventName + " handler done."); //todo:
         };
 
         console.log("Receiving events on queue " + eventName); //todo:
