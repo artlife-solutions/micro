@@ -3,14 +3,10 @@
 //
 
 import * as express from 'express';
-import { Express } from 'express';
 import * as amqp from 'amqplib';
 import * as request from 'request';
 import * as requestPromise from 'request-promise';
-import { readJsonFile } from './file';
-import { sleep, asyncHandler, retry } from './utils';
-export { sleep, asyncHandler, retry } from './utils';
-import { reject, resolve } from 'bluebird';
+import { asyncHandler, retry } from './utils';
 const morganBody = require('morgan-body');
 import * as http from 'http';
 
@@ -106,6 +102,12 @@ export interface IEventResponse {
     ack(): Promise<void>;
 }
 
+//
+// Interface that represents a register event binding and allows it to unregistered.
+//
+export interface IEventHandler {
+}
+
 /**
  * Defines a potentially asynchronous callback function for handling an incoming event.
  */
@@ -138,7 +140,33 @@ export interface IMicroService {
      * @param eventName The name of the event to handle.
      * @param eventHandler Callback to be invoke when the incoming event is received.
      */
-    on<EventArgsT = any>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void>;
+    on<EventArgsT = any>(eventName: string, eventHandlerFn: EventHandlerFn<EventArgsT>): Promise<IEventHandler>;
+
+    /**
+     * Unregister a previously register event handler.
+     * 
+     * @param eventHandler The event handler to unregister.
+     */
+    off(eventHandler: IEventHandler): void;
+
+    /**
+     * Create a once-off handler for a named incoming event.
+     * The event handler will only be invoke once before the event is unregistered.
+     * Implemented by Rabbitmq under the hood for reliable messaging.
+     * 
+     * @param eventName The name of the event to handle.
+     * @param eventHandler Callback to be invoke when the incoming event is received.
+     */
+    once<EventArgsT = any>(eventName: string, eventHandlerFn: EventHandlerFn<EventArgsT>): Promise<void>;
+
+    /***
+     * Wait for a single incoming event, returns the events arguments and then unregister the event handler.
+     * 
+     * @param eventName The name of the event to handle.
+     * 
+     * @returns A promise to resolve the incoming event's arguments.
+     */
+    waitForOneEvent<EventArgsT = any>(eventName: string): Promise<EventArgsT>;
 
     /**
      * Emit a named outgoing event.
@@ -301,9 +329,27 @@ const defaultConfig: IMicroServiceConfig = {
 //
 // Used to register an event handler to be setup after messaging system has started.
 //
-interface IEventHandler {
+class EventHandler implements IEventHandler {
+
+    //
+    // The name of the event.
+    //
     eventName: string;
-    eventHandler: EventHandlerFn<any>;
+
+    //
+    // The user-defined function that handles the event.
+    //
+    eventHandlerFn: EventHandlerFn<any>;
+    
+    //
+    // Generated queue name after the queue is bound.
+    //
+    queueName?: string;
+
+    constructor(eventName: string, eventHandlerFn: EventHandlerFn<any>) {
+        this.eventName = eventName;
+        this.eventHandlerFn = eventHandlerFn;        
+    }
 }
 
 //
@@ -330,7 +376,7 @@ class MicroService implements IMicroService {
     // Event handlers that have been registered to be setup once
     // connection to message queue is established.
     ///
-    private registeredEventHandlers: IEventHandler[] = [];
+    private registeredEventHandlers = new Set<EventHandler>();
 
     constructor(config?: IMicroServiceConfig) {
         this.config = config || defaultConfig;
@@ -402,8 +448,8 @@ class MicroService implements IMicroService {
             
             this.messagingChannel = await this.messagingConnection!.createChannel();
 
-            for (const registeredEventHandler of this.registeredEventHandlers) {
-                await this.internalOn(registeredEventHandler.eventName, registeredEventHandler.eventHandler);
+            for (const eventHandler of this.registeredEventHandlers.values()) {
+                await this.internalOn(eventHandler);
             }
         }
 
@@ -421,15 +467,19 @@ class MicroService implements IMicroService {
     }
 
     //
-    // Internal message handler setup.
+    // Setup a RabbitMQ message handler.
     //
-    private async internalOn(eventName: string, eventHandler: EventHandlerFn<any>): Promise<void> {
+    private async internalOn(eventHandler: EventHandler): Promise<void> {
+
+        const eventName = eventHandler.eventName;
 
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertExchange
         await this.messagingChannel!.assertExchange(eventName, "fanout", { durable: true });
 
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertQueue
         const queueName = (await this.messagingChannel!.assertQueue("", { durable: true, exclusive: true })).queue;
+        eventHandler.queueName = queueName;
+        
         console.log('binding queue', queueName, 'to', eventName);
         this.messagingChannel!.bindQueue(queueName, eventName, "");
 
@@ -447,13 +497,14 @@ class MicroService implements IMicroService {
                 }
             }
 
-            await eventHandler(args, eventResponse);
+            await eventHandler.eventHandlerFn(args, eventResponse);
 
             //console.log(eventName + " handler done."); //todo:
         };
 
         console.log("Receiving events on queue " + eventName); //todo:
 
+        //todo: how do I unregister this?
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_consume   
         this.messagingChannel!.consume(
             queueName, 
@@ -463,27 +514,80 @@ class MicroService implements IMicroService {
             }
         );
     }
+
+    //
+    // Unwind a RabbitMQ message handler.
+    //
+    private internalOff(eventHandler: EventHandler): void {
+        this.messagingChannel!.unbindQueue(eventHandler.queueName!, eventHandler.eventName, ""); //TODO: Does this even work?
+        delete eventHandler.queueName;
+    }
     
     /**
-     * Create a handler for a named incoming event.
+     * Create an ongoing handler for a named incoming event.
      * Implemented by Rabbitmq under the hood for reliable messaging.
      * 
      * @param eventName The name of the event to handle.
      * @param eventHandler Callback to be invoke when the incoming event is received.
      */
-    async on<EventArgsT = any>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
-        
-        this.registeredEventHandlers.push({
-            eventName: eventName,
-            eventHandler: eventHandler,
-        });
+    async on<EventArgsT = any>(eventName: string, eventHandlerFn: EventHandlerFn<EventArgsT>): Promise<IEventHandler> {
+
+        const eventHandler = new EventHandler(eventName, eventHandlerFn);
+        this.registeredEventHandlers.add(eventHandler);
 
         if (this.messagingConnection) {
             //
             // Message system already started.
             //
-            await this.internalOn(eventName, eventHandler);
+            await this.internalOn(eventHandler);
         }
+
+        return eventHandler;
+    }
+
+    /**
+     * Unregister a previously register event handler.
+     * 
+     * @param handler The event handler to unregister.
+     */
+    off(handler: IEventHandler): void {
+        const eventHandler = handler as EventHandler;
+        if (this.messagingConnection) {
+            this.internalOff(eventHandler);
+        }
+
+        this.registeredEventHandlers.delete(eventHandler);
+    }
+
+    /**
+     * Create a once-off handler for a named incoming event.
+     * The event handler will only be invoke once before the event is unregistered.
+     * Implemented by Rabbitmq under the hood for reliable messaging.
+     * 
+     * @param eventName The name of the event to handle.
+     * @param eventHandler Callback to be invoke when the incoming event is received.
+     */
+    async once<EventArgsT = any>(eventName: string, eventHandlerFn: EventHandlerFn<EventArgsT>): Promise<void> {
+        const eventHandler = await this.on<EventArgsT>(eventName, async (args, res) => { //TODO: Binding and unbinding queues could be quite expensive!
+            this.off(eventHandler); // Unregister before we receive any more events.
+            await eventHandlerFn(args, res); // Trigger user callback.
+        });
+    }
+
+    /***
+     * Wait for a single incoming event, returns the events arguments and then unregister the event handler.
+     * 
+     * @param eventName The name of the event to handle.
+     * 
+     * @returns A promise to resolve the incoming event's arguments.
+     */
+    waitForOneEvent<EventArgsT = any>(eventName: string): Promise<EventArgsT> {
+        return new Promise<EventArgsT>((resolve) => { //TODO: Binding and unbinding queues could be quite expensive!
+            this.once(eventName, async (args, res) => {
+                res.ack(); // Ack the response.
+                resolve(args); // Resolve event args through the promise.
+            });
+        });        
     }
 
     /**
