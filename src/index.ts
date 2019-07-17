@@ -4,7 +4,7 @@
 
 import * as express from 'express';
 import { Express } from 'express';
-import * as amqp from 'amqplib/callback_api';
+import * as amqp from 'amqplib';
 import { argv } from 'yargs';
 import * as request from 'request';
 import * as requestPromise from 'request-promise';
@@ -81,7 +81,7 @@ const defaultConfig: IMicroServiceConfig = {
 
 const defaultExchange: IExchangeConfig = {
     name: 'exchange',
-    type: 'fanout',
+    type: 'topic',
     routes: [ '#' ],
 }
 
@@ -145,39 +145,6 @@ class MicroService implements IMicroService {
             });
         });
     }
-
-    //
-    // Connect to RabbitMQ.
-    //
-    private async connectMessaging(): Promise<amqp.Connection> {
-        return new Promise<amqp.Connection>((resolve, reject) => {
-            // @ts-ignore
-            amqp.connect(messagingHost, (err, connection) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(connection);
-                }
-            });
-        });
-    }
-
-    //
-    // Create a RabbitMQ messaging channel.
-    //
-    private async createMessagingChannel(): Promise<amqp.Channel> {
-        return new Promise<amqp.Channel>((resolve, reject) => {
-            this.messagingConnection!.createChannel((err, channel) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(channel);
-                }
-            });
-        });
-    }
         
     //
     // Lazily start RabbitMQ messaging.
@@ -185,48 +152,14 @@ class MicroService implements IMicroService {
     private async startMessaging(): Promise<void> {
         if (!this.messagingChannel) {
             console.log("Lazily initiating messaging system."); //todo:
-            this.messagingConnection = await retry(() => this.connectMessaging(), 3, 1000);
-            this.messagingChannel = await this.createMessagingChannel();
+            this.messagingConnection = await retry(async () => await amqp.connect(messagingHost), 3, 1000);
+            this.messagingChannel = await this.messagingConnection!.createChannel();
         
             //todo:
             // await connection.close();
         }
         
     }
-
-    //
-    // Make sure a RabbitMQ queue exists before using it.
-    //
-    private async assertQueue(queueName?: string): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            this.messagingChannel!.assertQueue(queueName, {}, (err, q) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    console.log("Starting message queue: " + q.queue);
-                    resolve(q.queue);
-                }
-            })
-        });
-    }
-
-    //
-    // Make sure a RabbitMQ exchange exists before using it.
-    //
-    private async assertExchange(name: string, type: string = ''): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
-            this.messagingChannel!.assertExchange(name, type, {}, err => {
-                if (err) {
-                    reject(err);
-                } else {
-                    console.log("Starting message exchange: " + name);
-                    resolve();
-                }
-            });
-        });
-    }
-    
 
     /**
      * Create a handler for a named incoming event.
@@ -237,8 +170,8 @@ class MicroService implements IMicroService {
      */
     async on<EventArgsT>(eventName: string, eventHandler: EventHandlerFn<EventArgsT>): Promise<void> {
         await this.startMessaging();
-        await this.assertExchange(eventName);
-        const queueName = await this.assertQueue(eventName);
+        await this.messagingChannel!.assertExchange(eventName, 'fanout');
+        const queueName = (await this.messagingChannel!.assertQueue('')).queue;
         this.messagingChannel!.bindQueue(queueName, eventName, '');
 
         const messagingChannel = this.messagingChannel!;
@@ -274,7 +207,7 @@ class MicroService implements IMicroService {
      */
     async emit<EventArgsT>(eventName: string, eventArgs: EventArgsT): Promise<void> {
         await this.startMessaging();
-        await this.assertExchange(eventName);
+        await this.messagingChannel!.assertExchange(eventName, 'fanout');
 
         console.log('sendMessage:'); //TODO: Logging.
         console.log("    " + eventName);
@@ -298,10 +231,9 @@ class MicroService implements IMicroService {
         };
 
         await this.startMessaging();
-        await this.assertExchange(exchange.name, exchange.type);
-
-        const queueName = await this.assertQueue()
-        exchange.routes.forEach(route => this.messagingChannel!.bindQueue(queueName, exchange.name, route));
+        this.messagingChannel!.assertExchange(exchange.name, exchange.type);
+        const queueName = (await this.messagingChannel!.assertQueue('')).queue;
+        await Promise.all(exchange.routes.map(route => this.messagingChannel!.bindQueue(queueName, eventName, route)));
 
         const messagingChannel = this.messagingChannel!;
 
@@ -342,7 +274,7 @@ class MicroService implements IMicroService {
             type: exchangeConfig.type || defaultExchange.type,
             routes: exchangeConfig.routes || defaultExchange.routes,
         };
-        await this.assertExchange(exchange.name, exchange.type);
+        await this.messagingChannel!.assertExchange(exchange.name, exchange.type);
 
         exchange.routes.forEach(route => {
             console.log(`sendMessage to ${exchange.name}:${exchange.type}-${route}`);
