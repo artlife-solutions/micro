@@ -13,6 +13,16 @@ Things like:
 - health checks
 - tracing requests and events across services
 
+## Environment variables
+
+Configuration of the microserver can be done via environment variables (if not configure specifically in the code):
+
+- HOST - Sets the host for the REST API (defaults to 0.0.0.0).
+- PORT - Sets the port number for the REST API (defaults to 3000).
+- MESSAGING_HOST - Sets the connection to the RabbitMQ server (defaults to amqp://guest:guest@localhost:5672).
+- NODE_ENV - When set to PRODUCTION Morgan request tracing is disabled.
+- ENABLE_MORGAN - When set to "true" Morgan request tracing is enabled (can be used to enable request tracing in production).
+
 ## Installation
 
     npm install --save @artlife/micro    

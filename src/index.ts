@@ -91,6 +91,26 @@ export interface IMetrics {
  * Configures a microservice.
  */
 export interface IMicroServiceConfig {
+    
+    /**
+     * Enable verbose logging from micro.
+     */
+    verbose?: boolean;
+
+    /**
+     * Host to run the REST API.
+     */
+    host?: string;
+
+    /**
+     * Port to run the REST API.
+     */
+    port?: number;
+
+    /**
+     * Defines the connection to the RabbitMQ server.
+     */
+    messagingHost?: string;
 
 }
 
@@ -269,19 +289,6 @@ export interface IMicroService {
 
 }
 
-interface StringMap {
-    [index: string]: string;
-}
-
-//TODO: These should be passed into micro via options if necessary.
-const host = process.env.HOST || '0.0.0.0';
-const port = (process.env.PORT && parseInt(process.env.PORT)) || 3000;
-const messagingHost = process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
-
-console.log("Host:      " + host);
-console.log("Port:      " + port);
-console.log("Messaging: " + messagingHost);
-
 //
 // Logging implementation.
 //
@@ -406,16 +413,42 @@ class MicroService implements IMicroService {
     }
 
     //
+    // Helper method for verbose logging.
+    //
+    private verbose(msg: string): void {
+        if (this.config.verbose) {
+            console.log(msg);
+        }
+    }
+
+    //
     // Start the Express HTTP server.
     //
     private async startHttpServer(): Promise<void> {
+        
         return new Promise<void>((resolve, reject) => {
+            let host: string;
+            if (this.config.host !== undefined) {
+                host = this.config.host;
+            }
+            else {
+                host = process.env.HOST || '0.0.0.0';
+            }
+
+            let port: number;
+            if (this.config.port !== undefined) {
+                port = this.config.port;
+            }
+            else {
+                port = (process.env.PORT && parseInt(process.env.PORT)) || 3000;
+            }
+
             this.httpServer.listen(port, host, (err: any) => {
                 if (err) {
                     reject(err);
                 }
                 else {
-                    console.log(`Running on http://${port}:${host}`); //TODO: Need better logging.
+                    this.verbose(`Running on http://${port}:${host}`);
                     resolve();
                 }
             });
@@ -428,6 +461,16 @@ class MicroService implements IMicroService {
     private async startMessaging(): Promise<void> {
 
         const initMessaging = async (): Promise<void> => {
+            let messagingHost: string;
+            if (this.config.messagingHost) {
+                messagingHost = this.config.messagingHost;
+            }
+            else {
+                messagingHost = process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
+            }
+            
+            this.verbose("Connteting to messaging server at: " + messagingHost);
+            
             this.messagingConnection = await retry(async () => await amqp.connect(messagingHost), 10000, 1000);
         
             this.messagingConnection.on("error", err => {
