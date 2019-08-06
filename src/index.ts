@@ -9,6 +9,7 @@ import * as requestPromise from 'request-promise';
 import { asyncHandler, retry } from './utils';
 const morganBody = require('morgan-body');
 import * as http from 'http';
+import * as bodyParser from 'body-parser';
 
 const inProduction = process.env.NODE_ENV === "production";
 const enableMorgan = !inProduction || process.env.ENABLE_MORGAN === "true";
@@ -389,8 +390,7 @@ class MicroService implements IMicroService {
             next();
         }); 
         
-        // this.expressApp.use(bodyParser.urlencoded({ extended: false }));
-        // this.expressApp.use(bodyParser.json());
+        this.expressApp.use(bodyParser.json());
 
         if (enableMorgan) {
             console.log("Enabling Morgan request tracing.");
