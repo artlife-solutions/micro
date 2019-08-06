@@ -392,11 +392,13 @@ class MicroService implements IMicroService {
         this.expressApp = express();
         this.httpServer = new http.Server(this.expressApp);
 
-        this.expressApp.use((req, res, next) => { //TODO: Only for testing! Remove this in prod.
-            res.header("Access-Control-Allow-Origin", "*");
-            res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-            next();
-        }); 
+        if (!inProduction) {
+            this.expressApp.use((req, res, next) => {
+                res.header("Access-Control-Allow-Origin", "*");
+                res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+                next();
+            }); 
+        }
         
         this.expressApp.use(bodyParser.json());
 
