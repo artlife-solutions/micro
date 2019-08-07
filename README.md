@@ -25,112 +25,29 @@ Configuration of the microserver can be done via environment variables (if not c
 
 ## Installation
 
-    npm install --save @artlife/micro    
+    npm install --save @artlife/micro
 
-## Example Usage (TypeScript)
+## Example Usage
 
-```javascript
-import * micro from 'micro';
+For an example use, please see the template microservice:
 
-//
-// Entry point for the microservice.
-// The 'export' keyword is for testing.
-//
-export async function main(service: IMicroService): Promise<void> { 
-
-    //
-    // Handle a message, do some work, then publish a new message.
-    // This uses Rabbitmq under the hood for reliable message handling.
-    // The callback is wrapped for error handling, performance metrics and message tracing.
-    // A bit like Express's post function.
-    //
-    service.on("do-some-work", async (args, res) => {
-        //
-        // ... do some work ...
-        //
-
-        //
-        // Emit an outgoing event.
-        //
-        await service.emit("another-event", { your: "json data goes here" });
-
-        //
-        // Acknowledge that the message was handled correctly.
-        //
-        await res.ack(); 
-    });
-
-    //
-    // Create a HTTP GET request handler for a particular route.
-    // Do some work and return some json.
-    // Under the hood this is handled by Express, but the callback is wrapped for 
-    // error handling, performance metrics and request tracing.
-    //
-    service.get('/another-end-point', async (req, res) => {
-        //
-        // ... do some work ...
-        //
-
-        //
-        // Respond to the request with some JSON data.
-        //
-        await res.json({
-            your: "json data"
-        });
-    });
-    
-    //
-    // End points can be easily forwarded to internal services. 
-    //
-    service.get('/another-end-point', async (req, res) => {
-        //
-        // Proxy the request to 'another-service'.
-        //
-        service.forwardRequest("another-service", "/a-different-end-point", { optionalQueryParameters: "go here" }, res);
-    });
-
-    //
-    // Initiate the service (a bit like like Express' listen function).
-    //
-    await service.start();
-
-}
-
-if (require.main === module) {
-
-    
-    //
-    // Run micro service as normal.
-    //
-    const service = micro();
-
-    main(service) 
-        .then(() => console.log("Online"))
-        .catch(err => {
-            console.error("Failed to start!");
-            console.error(err && err.stack || err);
-        });
-}
-else {
-    //
-    // Don't start microservice, this allows the service to be loaded for unit testing.
-    //        
-}
-```
+https://github.com/artlife-solutions/template-microservice
 
 ## Building the code
 
 Open folder in Visual Studio Code and hit Ctrl+Shift+B
 
+Or run
+
+    npm run build
+
 Or
 
-    npm build
-
-Or
-
-    npx tsc [-w]
+    npx tsc
 
 ## Tests
+
+Run
 
     npm test
 

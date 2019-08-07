@@ -308,7 +308,7 @@ class EventHandler implements IEventHandler {
 //
 // Class that represents a particular microservice instance.
 //
-class MicroService implements IMicroService {
+export class MicroService implements IMicroService {
 
     //
     // RabbitMQ messaging connection.
