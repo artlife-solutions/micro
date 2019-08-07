@@ -5,6 +5,28 @@ import { assert } from "chai";
 //
 
 //
+// Verify that a query parameter to a request is set.
+//
+export function verifyQueryParam(name: string, req: any): string {
+    if (!req.query[name] === undefined) {
+        throw new Error("Missing query parameter " + name);
+    }
+
+    return req.query[name];
+}
+
+//
+// Verify that a body parameter to a request is set.
+//
+export function verifyBodyParam(name: string, req: any): string {
+    if (req.body[name] === undefined) {
+        throw new Error("Missing body parameter " + name);
+    }
+
+    return req.body[name];
+}
+
+//
 // Sleep for the specified amount of time.
 //
 export async function sleep(timeMS: number): Promise<void> {

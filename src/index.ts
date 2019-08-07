@@ -4,10 +4,11 @@
 
 import * as express from 'express';
 import * as amqp from 'amqplib';
+import axios from "axios";
 import * as request from 'request';
 import * as requestPromise from 'request-promise';
-import { asyncHandler, retry, sleep } from './utils';
-export { asyncHandler, retry, sleep };
+import { asyncHandler, retry, sleep, verifyBodyParam, verifyQueryParam } from './utils';
+export { asyncHandler, retry, sleep, verifyBodyParam, verifyQueryParam };
 const morganBody = require('morgan-body');
 import * as http from 'http';
 import * as bodyParser from 'body-parser';
@@ -146,6 +147,70 @@ export type GetRequestHandlerFn = (request: express.Request, response: express.R
 export type PostRequestHandlerFn = (request: express.Request, response: express.Response) => Promise<void>;
 
 /**
+ * Interface for defining HTTP routes on a REST API.
+ */
+export interface IHttpServer {
+
+    /**
+     * Create a handler for incoming HTTP GET requests.
+     * Implemented by Express under the hood.
+     */
+    get(route: string, requestHandler: GetRequestHandlerFn): void;
+
+    /**
+     * Create a handler for incoming HTTP POST requests.
+     * Implemented by Express under the hood
+     * 
+     * @param route 
+     * @param requestHandler 
+     */
+    post(route: string, requestHandler: PostRequestHandlerFn): void;
+
+    /**
+     * Setup serving of static files.
+     * 
+     * @param dirPath The path to the directory that contains static files.
+     */
+    static(dirPath: string): void;
+}
+
+/**
+ * Interface for issuing HTTP requests to a REST API.
+ */
+export interface IHttpRequest {
+
+    /**
+     * Make a HTTP get request to another service.
+     * 
+     * @param serviceName The name (logical or host) of the service.
+     * @param route The HTTP route on the service to make the request to.
+     * @param params Query parameters for the request.
+     */
+    get(serviceName: string, route: string, body?: any): Promise<any>;
+
+    /**
+     * Make a HTTP get request to another service.
+     * 
+     * @param serviceName The name (logical or host) of the service.
+     * @param route The HTTP route on the service to make the request to.
+     * @param params Query parameters for the request.
+     */
+    post(serviceName: string, route: string, body: any): Promise<void>;
+
+    /**
+     * Forward HTTP get request to another named service.
+     * The response from the forward requests is automatically piped into the passed in response.
+     * 
+     * @param serviceName The name of the service to forward the request to.
+     * @param route The HTTP GET route to forward to.
+     * @param params Query parameters for the request.
+     * @param res The stream to pipe response to.
+     */
+    forward(serviceName: string, route: string, req: express.Request, res: express.Response): void;
+
+}
+
+/**
  * Interface that represents a particular microservice instance.
  */
 export interface IMicroService {
@@ -200,59 +265,6 @@ export interface IMicroService {
     emit<EventArgsT = any>(eventName: string, eventArgs: EventArgsT): Promise<void>;
 
     /**
-     * Create a handler for incoming HTTP GET requests.
-     * Implemented by Express under the hood.
-     */
-    get(route: string, requestHandler: GetRequestHandlerFn): void;
-
-    /**
-     * Create a handler for incoming HTTP POST requests.
-     * Implemented by Express under the hood
-     * 
-     * @param route 
-     * @param requestHandler 
-     */
-    post(route: string, requestHandler: PostRequestHandlerFn): void;
-
-    /**
-     * Make a request to another service.
-     * 
-     * @param serviceName The name (logical or host) of the service.
-     * @param route The HTTP route on the service to make the request to.
-     * @param params Query parameters for the request.
-     */
-    request(serviceName: string, route: string, params?: any): Promise<any>;
-
-    /**
-     * Forward HTTP get request to another named service.
-     * The response from the forward requests is automatically piped into the passed in response.
-     * 
-     * @param serviceName The name of the service to forward the request to.
-     * @param route The HTTP GET route to forward to.
-     * @param body The body of the forwarded request.
-     * @param response The response for the HTTP GET current request, to have the response forwarded to.
-     */
-    forwardRequest<RequestBodyT, ResponseT>(serviceName: string, route: string, body: RequestBodyT, response: express.Response): void;
-
-    /**
-     * Forward HTTP get request to another named service.
-     * The response from the forward requests is automatically piped into the passed in response.
-     * 
-     * @param serviceName The name of the service to forward the request to.
-     * @param route The HTTP GET route to forward to.
-     * @param params Query parameters for the request.
-     * @param res The stream to pipe response to.
-     */
-    forwardRequest2(serviceName: string, route: string, params: any, req: express.Request, res: express.Response): void;
-
-    /**
-     * Setup serving of static files.
-     * 
-     * @param dirPath The path to the directory that contains static files.
-     */
-    static(dirPath: string): void;
-
-    /**
      * Reference to the logging interface.
      * This allows the logging from multiple microservices to be aggregated.
      */
@@ -280,6 +292,16 @@ export interface IMicroService {
      * Reference to the HTTP server.
      */
     readonly httpServer: http.Server;
+
+    /**
+     * Interface for defining the REST API.
+     */
+    readonly rest: IHttpServer;
+
+    /**
+     * Interface for issuing HTTP requests to a REST API.
+     */
+    readonly request: IHttpRequest;
     
     /**
      * Starts the microservice.
@@ -412,6 +434,102 @@ class MicroService implements IMicroService {
         this.expressApp.get("/is-alive", (req, res) => {
             res.json({ ok: true });
         });
+
+        this.rest = {
+            /**
+             * Create a handler for incoming HTTP GET requests.
+             * Implemented by Express under the hood.
+             */
+            get: (route: string, requestHandler: GetRequestHandlerFn): void => {
+                this.expressApp.get(route, (req: express.Request, res: express.Response) => {
+                    this.verbose("Handling GET " + route);
+
+                    requestHandler(req, res)
+                        .then(() => {
+                            this.verbose(`HTTP GET handler for ${route} finished.`);
+                        })
+                        .catch(err => {
+                            console.error("Error from handler: HTTP GET " + route);
+                            console.error(err && err.stack || err);
+
+                            res.sendStatus(500);
+                        });
+                });
+            },
+
+            /**
+             * Create a handler for incoming HTTP POST requests.
+             * Implemented by Express under the hood.
+             */
+            post: (route: string, requestHandler: PostRequestHandlerFn): void => {
+                this.expressApp.post(route, (req: express.Request, res: express.Response) => {
+                    this.verbose("Handling POST " + route);
+
+                    requestHandler(req, res)
+                        .then(() => {
+                            this.verbose(`HTTP POST handler for ${route} finished.`);
+                        })
+                        .catch(err => {
+                            console.error("Error from handler: HTTP POST " + route);
+                            console.error(err && err.stack || err);
+
+                            res.sendStatus(500);
+                        });
+                });
+            },
+
+            /**
+             * Setup serving of static files.
+             * 
+             * @param dirPath The path to the directory that contains static files.
+             */
+            static: (dirPath: string): void => {
+                console.log("Serving static files from " + dirPath);
+                this.expressApp.use(express.static(dirPath));
+            },
+
+        };
+
+        this.request = {
+
+            /**
+             * Make a HTTP get request to another service.
+             * 
+             * @param serviceName The name (logical or host) of the service.
+             * @param route The HTTP route on the service to make the request to.
+             * @param params Query parameters for the request.
+             */
+            get: async (serviceName: string, route: string, body?: any): Promise<any> => {
+                const url = "http://" + serviceName + route;
+                return await axios.get(url, body);
+            },
+
+            /**
+             * Make a HTTP get request to another service.
+             * 
+             * @param serviceName The name (logical or host) of the service.
+             * @param route The HTTP route on the service to make the request to.
+             * @param params Query parameters for the request.
+             */
+            post: async (serviceName: string, route: string, body: any): Promise<void> => {
+                const url = "http://" + serviceName + route;
+                await axios.post(url, body);
+            },
+
+            /**
+             * Forward HTTP get request to another named service.
+             * The response from the forward requests is automatically piped into the passed in response.
+             * 
+             * @param serviceName The name of the service to forward the request to.
+             * @param route The HTTP GET route to forward to.
+             * @param params Query parameters for the request.
+             * @param res The stream to pipe response to.
+             */
+            forward(serviceName: string, route: string, req: express.Request, res: express.Response): void {
+                const url = "http://" + serviceName + route;
+                req.pipe(request(url)).pipe(res);
+            }
+        };
     }
 
     //
@@ -531,11 +649,10 @@ class MicroService implements IMicroService {
 
         const messagingChannel = this.messagingChannel!;
 
-        async function consumeCallback(msg: amqp.Message): Promise<void> {
-            //console.log("Handling " + eventName); //TODO: Logging.
+        const consumeCallback = async (msg: amqp.Message): Promise<void> => {
+            this.verbose("Handling " + eventName);
 
             const args = JSON.parse(msg.content.toString())
-            //console.log(args); //TODO:
 
             const eventResponse: IEventResponse = {
                 async ack(): Promise<void> {
@@ -545,13 +662,12 @@ class MicroService implements IMicroService {
 
             await eventHandler.eventHandlerFn(args, eventResponse);
 
-            //console.log(eventName + " handler done."); //todo:
+            this.verbose(eventName + " handler done.");
         };
 
-        console.log("Receiving events on queue " + eventName); //todo:
+        this.verbose("Receiving events on queue " + eventName);
 
-        //todo: how do I unregister this?
-        // http://www.squaremobius.net/amqp.node/channel_api.html#channel_consume   
+        // http://www.squaremobius.net/amqp.node/channel_api.html#channel_consume
         this.messagingChannel!.consume(
             queueName, 
             asyncHandler(this, "ASYNC: " + eventName, consumeCallback),
@@ -565,7 +681,7 @@ class MicroService implements IMicroService {
     // Unwind a RabbitMQ message handler.
     //
     private internalOff(eventHandler: EventHandler): void {
-        this.messagingChannel!.unbindQueue(eventHandler.queueName!, eventHandler.eventName, ""); //TODO: Does this even work?
+        this.messagingChannel!.unbindQueue(eventHandler.queueName!, eventHandler.eventName, "");
         delete eventHandler.queueName;
     }
     
@@ -614,7 +730,7 @@ class MicroService implements IMicroService {
      * @param eventHandler Callback to be invoke when the incoming event is received.
      */
     async once<EventArgsT = any>(eventName: string, eventHandlerFn: EventHandlerFn<EventArgsT>): Promise<void> {
-        const eventHandler = await this.on<EventArgsT>(eventName, async (args, res) => { //TODO: Binding and unbinding queues could be quite expensive!
+        const eventHandler = await this.on<EventArgsT>(eventName, async (args, res) => { //TODO: Binding and unbinding queues could be quite expensive! Is there a better way to do this?
             this.off(eventHandler); // Unregister before we receive any more events.
             await eventHandlerFn(args, res); // Trigger user callback.
         });
@@ -628,7 +744,7 @@ class MicroService implements IMicroService {
      * @returns A promise to resolve the incoming event's arguments.
      */
     waitForOneEvent<EventArgsT = any>(eventName: string): Promise<EventArgsT> {
-        return new Promise<EventArgsT>((resolve) => { //TODO: Binding and unbinding queues could be quite expensive!
+        return new Promise<EventArgsT>((resolve) => { //TODO: Binding and unbinding queues could be quite expensive! Is there a better way to do this?
             this.once(eventName, async (args, res) => {
                 res.ack(); // Ack the response.
                 resolve(args); // Resolve event args through the promise.
@@ -667,156 +783,10 @@ class MicroService implements IMicroService {
     }
 
     /**
-     * Create a handler for incoming HTTP GET requests.
-     * Implemented by Express under the hood.
-     */
-    get(route: string, requestHandler: GetRequestHandlerFn): void {
-        this.expressApp.get(route, (req: express.Request, res: express.Response) => {
-            console.log("Handling GET", route); //TODO: Proper optional logging.
-            console.log(req.query);
-
-            requestHandler(req, res)
-                .then(() => {
-                    console.log(`HTTP GET handler for ${route} finished.`);
-                })
-                .catch(err => {
-                    console.error("Error from handler: HTTP GET " + route);
-                    console.error(err && err.stack || err);
-
-                    res.sendStatus(500);
-                });
-        });
-    }
-
-    //
-    // POST request stub
-    //
-    post(route: string, requestHandler: PostRequestHandlerFn): void {
-        this.expressApp.post(route, (req: express.Request, res: express.Response) => {
-            console.log("Handling POST", route);
-            console.log(req.query);
-
-            requestHandler(req, res)
-                .then(() => {
-                    console.log(`HTTP POST handler for ${route} finished.`);
-                })
-                .catch(err => {
-                    console.error("Error from handler: HTTP POST " + route);
-                    console.error(err && err.stack || err);
-
-                    res.sendStatus(500);
-                });
-        });
-    }
-
-    //
-    // Create a full URL for a service request mapping the service name to host name if necessary.
-    //
-    makeFullUrl(serviceName: string, route: string) {
-        return "http://" + serviceName + route;
-    }
-    
-    /**
-     * Make a request to another service.
-     * 
-     * @param serviceName The name (logical or host) of the service.
-     * @param route The HTTP route on the service to make the request to.
-     * @param params Query parameters for the request.
-     */
-    async request(serviceName: string, route: string, params?: any): Promise<any> {
-        let fullUrl = this.makeFullUrl(serviceName, route);
-        if (params) {
-            const paramKeys = Object.keys(params);
-            let firstKey = true;
-            for (let keyIndex = 0; keyIndex < paramKeys.length; ++keyIndex) {
-                const key = paramKeys[keyIndex];
-                const value = params[key];
-                if (value !== undefined) {
-                    fullUrl += firstKey ? "?" : "&"
-                    fullUrl += key + "=" + value;
-                    firstKey = false;
-                }
-            }
-        }
-
-        console.log("<< " + fullUrl); //TODO:
-
-        return await requestPromise(fullUrl, { json: true });
-    }
-
-    /**
-     * Forward HTTP get request to another named service.
-     * The response from the forward requests is automatically piped into the passed in response.
-     * 
-     * @param serviceName The name of the service to forward the request to.
-     * @param route The HTTP GET route to forward to.
-     * @param params Query parameters for the request.
-     * @param toResponse The stream to pipe response to.
-     */
-    forwardRequest(serviceName: string, route: string, params: any, toResponse: express.Response): void { //TODO: Get rid of this version.
-        let fullUrl = this.makeFullUrl(serviceName, route);
-        const paramKeys = Object.keys(params);
-        let firstKey = true;
-        for (let keyIndex = 0; keyIndex < paramKeys.length; ++keyIndex) {
-            const key = paramKeys[keyIndex];
-            const value = params[key];
-            if (value) {
-                fullUrl += firstKey ? "?" : "&"
-                fullUrl += key + "=" + value;
-                firstKey = false;
-            }
-        }
-
-        console.log(">> " + fullUrl); //TODO:
-
-        request(fullUrl).pipe(toResponse);
-    }
-
-    /**
-     * Forward HTTP get request to another named service.
-     * The response from the forward requests is automatically piped into the passed in response.
-     * 
-     * @param serviceName The name of the service to forward the request to.
-     * @param route The HTTP GET route to forward to.
-     * @param params Query parameters for the request.
-     * @param res The stream to pipe response to.
-     */
-    forwardRequest2(serviceName: string, route: string, params: any, req: express.Request, res: express.Response): void {
-        let fullUrl = this.makeFullUrl(serviceName, route);
-        const paramKeys = Object.keys(params);
-        let firstKey = true;
-        for (let keyIndex = 0; keyIndex < paramKeys.length; ++keyIndex) {
-            const key = paramKeys[keyIndex];
-            const value = params[key];
-            if (value) {
-                fullUrl += firstKey ? "?" : "&"
-                fullUrl += key + "=" + value;
-                firstKey = false;
-            }
-        }
-
-        console.log(">> " + fullUrl); //TODO:
-
-        req.pipe(request(fullUrl)).pipe(res);
-    }
-    
-
-    /**
-     * Setup serving of static files.
-     * 
-     * @param dirPath The path to the directory that contains static files.
-     */
-    static(dirPath: string): void {
-        console.log("Serving static files from " + dirPath);
-        this.expressApp.use(express.static(dirPath));
-    }
-
-    /**
      * Reference to the logging interface.
      * This allows the logging from multiple microservices to be aggregated.
      */
     readonly log: ILog = new Log();
-
 
     /**
      * Reference to the timer interface.
@@ -856,6 +826,16 @@ class MicroService implements IMicroService {
      */
     readonly httpServer: http.Server;
     
+    /**
+     * Interface for defining the REST API.
+     */
+    readonly rest: IHttpServer;
+
+    /**
+     * Interface for issuing HTTP requests to a REST API.
+     */
+    readonly request: IHttpRequest;
+
     /**
      * Starts the microservice.
      * It starts listening for incoming HTTP requests and events.
