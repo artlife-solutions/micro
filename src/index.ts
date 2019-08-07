@@ -17,36 +17,6 @@ const inProduction = process.env.NODE_ENV === "production";
 const enableMorgan = !inProduction || process.env.ENABLE_MORGAN === "true";
 
 /**
- * Logging interface. Allows log from multiple microservices to be aggregated.
- */
-export interface ILog {
-    /**
-     * Issue a warning.
-     */
-    warn(...args: any[]): void;
-
-    /**
-     * Issue an information message.
-     */
-    info(...args: any[]): void;
-
-    /**
-     * Issue a verbose message.
-     */
-    verbose(...args: any[]): void;
-
-    /**
-     * Record an error message.
-     */
-    error(...args: any[]): void;
-
-    /**
-     * Record an exception that was thrown
-     */
-    exception(err: any, ...args: any[]): void;
-}
-
-/**
  * Interface used to time various events.
  */
 export interface ITimer {
@@ -265,12 +235,6 @@ export interface IMicroService {
     emit<EventArgsT = any>(eventName: string, eventArgs: EventArgsT): Promise<void>;
 
     /**
-     * Reference to the logging interface.
-     * This allows the logging from multiple microservices to be aggregated.
-     */
-    readonly log: ILog;
-
-    /**
      * Reference to the timer interface.
      * Allows a service to time code for performance.
      */
@@ -309,48 +273,6 @@ export interface IMicroService {
      */
     start(): Promise<void>;
 
-}
-
-//
-// Logging implementation.
-//
-class Log implements ILog {
-    /**
-     * Issue a warning.
-     */
-    warn(...args: any[]): void {
-        console.warn(...args);
-    }
-
-    /**
-     * Issue an information message.
-     */
-    info(...args: any[]): void {
-        console.log(...args);
-    }
-
-    /**
-     * Issue a verbose message.
-     */
-    verbose(...args: any[]): void {
-        console.log(...args);
-    }
-
-    /**
-     * Record an error message.
-     */
-    error(...args: any[]): void {
-        console.error(...args);
-    }
-
-    /**
-     * Record an exception that was thrown
-     */
-    exception(err: any, ...args: any[]): void {
-        console.error("Exception:");
-        console.error(err && err.stack || err);
-        console.error(...args);
-    }
 }
 
 const defaultConfig: IMicroServiceConfig = {
@@ -781,12 +703,6 @@ class MicroService implements IMicroService {
             }
         ); //TODO: Probably a more efficient way to do this! Maybe BSON?
     }
-
-    /**
-     * Reference to the logging interface.
-     * This allows the logging from multiple microservices to be aggregated.
-     */
-    readonly log: ILog = new Log();
 
     /**
      * Reference to the timer interface.
