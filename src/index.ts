@@ -109,12 +109,7 @@ export type EventHandlerFn<EventArgsT> = (eventArgs: EventArgsT, response: IEven
 /**
  * Defines a potentially asynchronous callback function for handling an incoming HTTP GET request.
  */
-export type GetRequestHandlerFn = (request: express.Request, response: express.Response) => Promise<void>;
-
-/**
- * Defines a potentially asynchronous callback function for handling an incoming HTTP POST request.
- */
-export type PostRequestHandlerFn = (request: express.Request, response: express.Response) => Promise<void>;
+export type RequestHandlerFn = (request: express.Request, response: express.Response) => Promise<void>;
 
 /**
  * Interface for defining HTTP routes on a REST API.
@@ -125,7 +120,7 @@ export interface IHttpServer {
      * Create a handler for incoming HTTP GET requests.
      * Implemented by Express under the hood.
      */
-    get(route: string, requestHandler: GetRequestHandlerFn): void;
+    get(route: string, requestHandler: RequestHandlerFn): void;
 
     /**
      * Create a handler for incoming HTTP POST requests.
@@ -134,7 +129,16 @@ export interface IHttpServer {
      * @param route 
      * @param requestHandler 
      */
-    post(route: string, requestHandler: PostRequestHandlerFn): void;
+    post(route: string, requestHandler: RequestHandlerFn): void;
+
+    /**
+     * Create a handler for incoming HTTP PUT requests.
+     * Implemented by Express under the hood
+     * 
+     * @param route 
+     * @param requestHandler 
+     */
+    put(route: string, requestHandler: RequestHandlerFn): void;
 
     /**
      * Setup serving of static files.
@@ -362,7 +366,7 @@ export class MicroService implements IMicroService {
              * Create a handler for incoming HTTP GET requests.
              * Implemented by Express under the hood.
              */
-            get: (route: string, requestHandler: GetRequestHandlerFn): void => {
+            get: (route: string, requestHandler: RequestHandlerFn): void => {
                 this.expressApp.get(route, (req: express.Request, res: express.Response) => {
                     this.verbose("Handling GET " + route);
 
@@ -383,7 +387,7 @@ export class MicroService implements IMicroService {
              * Create a handler for incoming HTTP POST requests.
              * Implemented by Express under the hood.
              */
-            post: (route: string, requestHandler: PostRequestHandlerFn): void => {
+            post: (route: string, requestHandler: RequestHandlerFn): void => {
                 this.expressApp.post(route, (req: express.Request, res: express.Response) => {
                     this.verbose("Handling POST " + route);
 
@@ -399,6 +403,31 @@ export class MicroService implements IMicroService {
                         });
                 });
             },
+
+            /**
+             * Create a handler for incoming HTTP PUT requests.
+             * Implemented by Express under the hood
+             * 
+             * @param route 
+             * @param requestHandler 
+             */
+            put: (route: string, requestHandler: RequestHandlerFn): void => {
+                this.expressApp.put(route, (req: express.Request, res: express.Response) => {
+                    this.verbose("Handling PUT " + route);
+
+                    requestHandler(req, res)
+                        .then(() => {
+                            this.verbose(`HTTP PUT handler for ${route} finished.`);
+                        })
+                        .catch(err => {
+                            console.error("Error from handler: HTTP PUT " + route);
+                            console.error(err && err.stack || err);
+
+                            res.sendStatus(500);
+                        });
+                });
+            },
+            
 
             /**
              * Setup serving of static files.
