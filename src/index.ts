@@ -595,13 +595,14 @@ export class MicroService implements IMicroService {
         const queueName = (await this.messagingChannel!.assertQueue("", { durable: true, exclusive: true })).queue;
         eventHandler.queueName = queueName;
         
-        console.log('binding queue', queueName, 'to', eventName);
         this.messagingChannel!.bindQueue(queueName, eventName, "");
 
         const messagingChannel = this.messagingChannel!;
 
+        this.verbose(`Bound queue ${queueName} to ${eventName}.`);
+
         const consumeCallback = async (msg: amqp.Message): Promise<void> => {
-            this.verbose("Handling " + eventName);
+            this.verbose("Handling event " + eventName);
 
             const args = JSON.parse(msg.content.toString())
 
@@ -616,8 +617,6 @@ export class MicroService implements IMicroService {
             this.verbose(eventName + " handler done.");
         };
 
-        this.verbose("Receiving events on queue " + eventName);
-
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_consume
         this.messagingChannel!.consume(
             queueName, 
@@ -626,6 +625,8 @@ export class MicroService implements IMicroService {
                 noAck: false,
             }
         );
+
+        this.verbose("Receiving events on queue " + eventName);
     }
 
     //
@@ -718,9 +719,9 @@ export class MicroService implements IMicroService {
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertExchange
         await this.messagingChannel!.assertExchange(eventName, "fanout", { durable: true, });
 
-        console.log('sendMessage:'); //TODO: Logging.
-        console.log("    " + eventName);
-        console.log(eventArgs);
+        this.verbose("Sending message: " + eventName);
+        this.verbose(JSON.stringify(eventArgs, null, 4));
+
 
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_publish
         this.messagingChannel!.publish(
