@@ -62,7 +62,7 @@ export interface IMetrics {
  * Configures a microservice.
  */
 export interface IMicroServiceConfig {
-    
+
     /**
      * Enable verbose logging from micro.
      */
@@ -270,7 +270,7 @@ export interface IMicroService {
      * Interface for issuing HTTP requests to a REST API.
      */
     readonly request: IHttpRequest;
-    
+
     /**
      * Starts the microservice.
      * It starts listening for incoming HTTP requests and events.
@@ -297,7 +297,7 @@ class EventHandler implements IEventHandler {
     // The user-defined function that handles the event.
     //
     eventHandlerFn: EventHandlerFn<any>;
-    
+
     //
     // Generated queue name after the queue is bound.
     //
@@ -305,7 +305,7 @@ class EventHandler implements IEventHandler {
 
     constructor(eventName: string, eventHandlerFn: EventHandlerFn<any>) {
         this.eventName = eventName;
-        this.eventHandlerFn = eventHandlerFn;        
+        this.eventHandlerFn = eventHandlerFn;
     }
 }
 
@@ -318,7 +318,7 @@ export class MicroService implements IMicroService {
     // RabbitMQ messaging connection.
     //
     private messagingConnection?: amqp.Connection;
-    
+
     //
     // RabbitMQ messaging channel.
     //
@@ -345,9 +345,9 @@ export class MicroService implements IMicroService {
                 res.header("Access-Control-Allow-Origin", "*");
                 res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
                 next();
-            }); 
+            });
         }
-        
+
         this.expressApp.use(bodyParser.json());
 
         if (enableMorgan) {
@@ -356,7 +356,7 @@ export class MicroService implements IMicroService {
                 noColors: true,
             });
         }
-        
+
         this.expressApp.get("/is-alive", (req, res) => {
             res.json({ ok: true });
         });
@@ -427,7 +427,7 @@ export class MicroService implements IMicroService {
                         });
                 });
             },
-            
+
 
             /**
              * Setup serving of static files.
@@ -496,7 +496,7 @@ export class MicroService implements IMicroService {
     // Start the Express HTTP server.
     //
     private async startHttpServer(): Promise<void> {
-        
+
         return new Promise<void>((resolve, reject) => {
             let host: string;
             if (this.config.host !== undefined) {
@@ -525,7 +525,7 @@ export class MicroService implements IMicroService {
             });
         });
     }
-        
+
     //
     // Lazily start RabbitMQ messaging.
     //
@@ -539,11 +539,11 @@ export class MicroService implements IMicroService {
             else {
                 messagingHost = process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
             }
-            
-            this.verbose("Connteting to messaging server at: " + messagingHost);
-            
+
+            this.verbose("Connecting to messaging server at: " + messagingHost);
+
             this.messagingConnection = await retry(async () => await amqp.connect(messagingHost), 10000, 1000);
-        
+
             this.messagingConnection.on("error", err => {
                 console.error("Error from message system.");
                 console.error(err && err.stack || err);
@@ -560,7 +560,7 @@ export class MicroService implements IMicroService {
                         console.error(err && err.stack || err);
                     });
             });
-            
+
             this.messagingChannel = await this.messagingConnection!.createChannel();
 
             for (const eventHandler of this.registeredEventHandlers.values()) {
@@ -569,7 +569,7 @@ export class MicroService implements IMicroService {
         }
 
         await initMessaging();
-    
+
         //todo:
         // await connection.close();
     }
@@ -594,7 +594,7 @@ export class MicroService implements IMicroService {
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertQueue
         const queueName = (await this.messagingChannel!.assertQueue("", { durable: true, exclusive: true })).queue;
         eventHandler.queueName = queueName;
-        
+
         this.messagingChannel!.bindQueue(queueName, eventName, "");
 
         const messagingChannel = this.messagingChannel!;
@@ -619,7 +619,7 @@ export class MicroService implements IMicroService {
 
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_consume
         this.messagingChannel!.consume(
-            queueName, 
+            queueName,
             asyncHandler(this, "ASYNC: " + eventName, consumeCallback),
             {
                 noAck: false,
@@ -636,7 +636,7 @@ export class MicroService implements IMicroService {
         this.messagingChannel!.unbindQueue(eventHandler.queueName!, eventHandler.eventName, "");
         delete eventHandler.queueName;
     }
-    
+
     /**
      * Create an ongoing handler for a named incoming event.
      * Implemented by Rabbitmq under the hood for reliable messaging.
@@ -701,7 +701,7 @@ export class MicroService implements IMicroService {
                 res.ack(); // Ack the response.
                 resolve(args); // Resolve event args through the promise.
             });
-        });        
+        });
     }
 
     /**
@@ -725,8 +725,8 @@ export class MicroService implements IMicroService {
 
         // http://www.squaremobius.net/amqp.node/channel_api.html#channel_publish
         this.messagingChannel!.publish(
-            eventName, 
-            '', 
+            eventName,
+            '',
             new Buffer(JSON.stringify(eventArgs)),
             {
                 persistent: true,
@@ -760,7 +760,7 @@ export class MicroService implements IMicroService {
         continuous: (name: string, value: number): void => {
             // Just a stub for the moment.
         },
-    }; 
+    };
 
     /**
      * Reference to the express object.
@@ -771,7 +771,7 @@ export class MicroService implements IMicroService {
      * Reference to the HTTP server.
      */
     readonly httpServer: http.Server;
-    
+
     /**
      * Interface for defining the REST API.
      */
