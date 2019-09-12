@@ -65,6 +65,11 @@ export interface IMetrics {
 export interface IMicroServiceConfig {
 
     /**
+     * The name that identifies the service.
+     */
+    serviceName: string;
+
+    /**
      * Enable verbose logging from micro.
      */
     verbose?: boolean;
@@ -191,6 +196,11 @@ export interface IHttpRequest {
 export interface IMicroService {
 
     /**
+     * Get the name that identifies the service.
+     */
+    getServiceName(): string;
+
+    /**
      * Get the instance ID for the particular instance of the service.
      */
     getInstanceId(): string;
@@ -285,10 +295,6 @@ export interface IMicroService {
 
 }
 
-const defaultConfig: IMicroServiceConfig = {
-
-};
-
 //
 // Used to register an event handler to be setup after messaging system has started.
 //
@@ -346,8 +352,8 @@ export class MicroService implements IMicroService {
     ///
     private registeredEventHandlers = new Set<EventHandler>();
 
-    constructor(config?: IMicroServiceConfig) {
-        this.config = config || defaultConfig;
+    constructor(config: IMicroServiceConfig) {
+        this.config = Object.assign({}, config);
         this.expressApp = express();
         this.httpServer = new http.Server(this.expressApp);
 
@@ -586,6 +592,13 @@ export class MicroService implements IMicroService {
     }
 
     /**
+     * Get the name that identifies the service.
+     */
+    getServiceName(): string {
+        return this.config.serviceName;
+    }
+
+    /**
      * Get the instance ID for the particular instance of the service.
      */
     getInstanceId(): string {
@@ -816,6 +829,6 @@ export class MicroService implements IMicroService {
  * 
  * @param [config] Optional configuration for the microservice.
  */
-export function micro(config?: IMicroServiceConfig): IMicroService {
+export function micro(config: IMicroServiceConfig): IMicroService {
     return new MicroService(config);
 }
