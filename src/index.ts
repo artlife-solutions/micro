@@ -12,6 +12,7 @@ export { asyncHandler, retry, sleep, verifyBodyParam, verifyQueryParam };
 const morganBody = require('morgan-body');
 import * as http from 'http';
 import * as bodyParser from 'body-parser';
+import uuid = require('uuid');
 
 const inProduction = process.env.NODE_ENV === "production";
 const enableMorgan = !inProduction || process.env.ENABLE_MORGAN === "true";
@@ -190,6 +191,11 @@ export interface IHttpRequest {
 export interface IMicroService {
 
     /**
+     * Get the instance ID for the particular instance of the service.
+     */
+    getInstanceId(): string;
+
+    /**
      * Returns true if the messaging system is currently available.
      */
     isMessagingAvailable(): boolean;
@@ -313,6 +319,11 @@ class EventHandler implements IEventHandler {
 // Class that represents a particular microservice instance.
 //
 export class MicroService implements IMicroService {
+
+    //
+    // The unique ID for the particular instance of the microservice.
+    //
+    private id: string = uuid.v4();
 
     //
     // RabbitMQ messaging connection.
@@ -572,6 +583,13 @@ export class MicroService implements IMicroService {
 
         //todo:
         // await connection.close();
+    }
+
+    /**
+     * Get the instance ID for the particular instance of the service.
+     */
+    getInstanceId(): string {
+        return this.id;
     }
 
     /**
