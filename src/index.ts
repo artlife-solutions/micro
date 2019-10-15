@@ -293,6 +293,17 @@ export interface IMicroService {
      */
     start(): Promise<void>;
 
+    /**
+     * Start the HTTP server.
+     * ! No need to call this if you already called 'start'.
+     */
+    startHttpServer(): Promise<void>;
+
+    /**
+     * Start the RabbitMQ message queue.
+     * ! No need to call this if you already called 'start'.
+     */
+    startMessaging(): Promise<void>;
 }
 
 //
@@ -507,88 +518,6 @@ export class MicroService implements IMicroService {
         if (this.config.verbose) {
             console.log(msg);
         }
-    }
-
-    //
-    // Start the Express HTTP server.
-    //
-    private async startHttpServer(): Promise<void> {
-
-        return new Promise<void>((resolve, reject) => {
-            let host: string;
-            if (this.config.host !== undefined) {
-                host = this.config.host;
-            }
-            else {
-                host = process.env.HOST || '0.0.0.0';
-            }
-
-            let port: number;
-            if (this.config.port !== undefined) {
-                port = this.config.port;
-            }
-            else {
-                port = (process.env.PORT && parseInt(process.env.PORT)) || 3000;
-            }
-
-            this.httpServer.listen(port, host, (err: any) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    this.verbose(`Running on http://${port}:${host}`);
-                    resolve();
-                }
-            });
-        });
-    }
-
-    //
-    // Lazily start RabbitMQ messaging.
-    //
-    private async startMessaging(): Promise<void> {
-
-        const initMessaging = async (): Promise<void> => {
-            let messagingHost: string;
-            if (this.config.messagingHost) {
-                messagingHost = this.config.messagingHost;
-            }
-            else {
-                messagingHost = process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
-            }
-
-            this.verbose("Connecting to messaging server at: " + messagingHost);
-
-            this.messagingConnection = await retry(async () => await amqp.connect(messagingHost), 10000, 1000);
-
-            this.messagingConnection.on("error", err => {
-                console.error("Error from message system.");
-                console.error(err && err.stack || err);
-            });
-
-            this.messagingConnection.on("close", err => {
-                this.messagingConnection = undefined;
-                this.messagingChannel = undefined;
-                console.log("Lost connection to rabbit, waiting for restart.");
-                initMessaging()
-                    .then(() => console.log("Restarted messaging."))
-                    .catch(err => {
-                        console.error("Failed to restart messaging.");
-                        console.error(err && err.stack || err);
-                    });
-            });
-
-            this.messagingChannel = await this.messagingConnection!.createChannel();
-
-            for (const eventHandler of this.registeredEventHandlers.values()) {
-                await this.internalOn(eventHandler);
-            }
-        }
-
-        await initMessaging();
-
-        //todo:
-        // await connection.close();
     }
 
     /**
@@ -814,13 +743,96 @@ export class MicroService implements IMicroService {
     readonly request: IHttpRequest;
 
     /**
+     * Start the HTTP server.
+     * ! No need to call this if you already called 'start'.
+     */
+    async startHttpServer(): Promise<void> {
+
+        return new Promise<void>((resolve, reject) => {
+            let host: string;
+            if (this.config.host !== undefined) {
+                host = this.config.host;
+            }
+            else {
+                host = process.env.HOST || '0.0.0.0';
+            }
+
+            let port: number;
+            if (this.config.port !== undefined) {
+                port = this.config.port;
+            }
+            else {
+                port = (process.env.PORT && parseInt(process.env.PORT)) || 3000;
+            }
+
+            this.httpServer.listen(port, host, (err: any) => {
+                if (err) {
+                    reject(err);
+                }
+                else {
+                    this.verbose(`Running on http://${port}:${host}`);
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * Start the RabbitMQ message queue.
+     * ! No need to call this if you already called 'start'.
+     */
+    async startMessaging(): Promise<void> {
+
+        const initMessaging = async (): Promise<void> => {
+            let messagingHost: string;
+            if (this.config.messagingHost) {
+                messagingHost = this.config.messagingHost;
+            }
+            else {
+                messagingHost = process.env.MESSAGING_HOST || "amqp://guest:guest@localhost:5672";
+            }
+
+            this.verbose("Connecting to messaging server at: " + messagingHost);
+
+            this.messagingConnection = await retry(async () => await amqp.connect(messagingHost), 10000, 1000);
+
+            this.messagingConnection.on("error", err => {
+                console.error("Error from message system.");
+                console.error(err && err.stack || err);
+            });
+
+            this.messagingConnection.on("close", err => {
+                this.messagingConnection = undefined;
+                this.messagingChannel = undefined;
+                console.log("Lost connection to rabbit, waiting for restart.");
+                initMessaging()
+                    .then(() => console.log("Restarted messaging."))
+                    .catch(err => {
+                        console.error("Failed to restart messaging.");
+                        console.error(err && err.stack || err);
+                    });
+            });
+
+            this.messagingChannel = await this.messagingConnection!.createChannel();
+
+            for (const eventHandler of this.registeredEventHandlers.values()) {
+                await this.internalOn(eventHandler);
+            }
+        }
+
+        await initMessaging();
+
+        //todo:
+        // await connection.close();
+    }
+
+    /**
      * Starts the microservice.
      * It starts listening for incoming HTTP requests and events.
      */
     async start(): Promise<void> {
         await this.startHttpServer();
-
-        await this.startMessaging(); //TODO: Would be good to optionally enable this.
+        await this.startMessaging();
     }
 }
 
