@@ -166,7 +166,7 @@ export interface IHttpRequest {
      * @param route The HTTP route on the service to make the request to.
      * @param params Query parameters for the request.
      */
-    get(serviceName: string, route: string, body?: any): Promise<any>;
+    get<T = any>(serviceName: string, route: string, body?: any): Promise<T>;
 
     /**
      * Make a HTTP get request to another service.
@@ -175,7 +175,7 @@ export interface IHttpRequest {
      * @param route The HTTP route on the service to make the request to.
      * @param params Query parameters for the request.
      */
-    post(serviceName: string, route: string, body: any): Promise<void>;
+    post<T = void>(serviceName: string, route: string, body: any): Promise<T>;
 
     /**
      * Forward HTTP get request to another named service.
@@ -490,9 +490,9 @@ export class MicroService implements IMicroService {
              * @param route The HTTP route on the service to make the request to.
              * @param params Query parameters for the request.
              */
-            post: async (serviceName: string, route: string, body: any): Promise<void> => {
+            post: async (serviceName: string, route: string, body: any): Promise<any> => {
                 const url = "http://" + serviceName + route;
-                await axios.post(url, body);
+                return await axios.post(url, body);
             },
 
             /**
