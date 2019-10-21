@@ -18,7 +18,7 @@ export function verifyQueryParam(name: string, req: any): string {
 //
 // Verify that a body parameter to a request is set.
 //
-export function verifyBodyParam(name: string, req: any): string {
+export function verifyBodyParam<T = string>(name: string, req: any): T {
     if (req.body[name] === undefined) {
         throw new Error("Missing body parameter " + name);
     }
