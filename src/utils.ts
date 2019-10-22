@@ -8,7 +8,7 @@ import { assert } from "chai";
 // Verify that a query parameter to a request is set.
 //
 export function verifyQueryParam(name: string, req: any): string {
-    if (!req.query[name] === undefined) {
+    if (req.query[name] === undefined) {
         throw new Error("Missing query parameter " + name);
     }
 
