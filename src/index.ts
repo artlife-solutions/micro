@@ -377,6 +377,7 @@ export class MicroService implements IMicroService {
         }
 
         this.expressApp.use(bodyParser.json());
+        this.expressApp.use(bodyParser.urlencoded({ extended: true }));
 
         if (enableMorgan) {
             console.log("Enabling Morgan request tracing.");
