@@ -17,6 +17,25 @@ import uuid = require('uuid');
 const inProduction = process.env.NODE_ENV === "production";
 const enableMorgan = !inProduction || process.env.ENABLE_MORGAN === "true";
 
+process.on('exit', code => {
+    if (code === 0) {
+        console.log(`Process exited with code: ${code}`);
+    }
+    else {
+        console.error(`Process exited with error code: ${code}`);
+    }
+});
+
+process.on('uncaughtException', err => {
+    console.error(`Uncaught exception: ${err && err.stack || err}`);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled promise rejection at:', reason.stack || reason)
+    process.exit(1);
+});
+
 /**
  * Interface used to time various events.
  */
