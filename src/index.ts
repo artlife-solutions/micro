@@ -426,7 +426,9 @@ export class MicroService implements IMicroService {
                             console.error("Error from handler: HTTP GET " + route);
                             console.error(err && err.stack || err);
 
-                            res.sendStatus(500);
+                            if (!res.headersSent) {
+                                res.sendStatus(500);
+                            }
                         });
                 });
             },
@@ -447,7 +449,9 @@ export class MicroService implements IMicroService {
                             console.error("Error from handler: HTTP POST " + route);
                             console.error(err && err.stack || err);
 
-                            res.sendStatus(500);
+                            if (!res.headersSent) {
+                                res.sendStatus(500);
+                            }
                         });
                 });
             },
@@ -471,7 +475,9 @@ export class MicroService implements IMicroService {
                             console.error("Error from handler: HTTP PUT " + route);
                             console.error(err && err.stack || err);
 
-                            res.sendStatus(500);
+                            if (!res.headersSent) {
+                                res.sendStatus(500);
+                            }
                         });
                 });
             },
