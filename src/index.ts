@@ -395,8 +395,22 @@ export class MicroService implements IMicroService {
             });
         }
 
-        this.expressApp.use(bodyParser.json());
-        this.expressApp.use(bodyParser.urlencoded({ extended: true }));
+        //
+        // Allow middleware, but only under certain conditions.
+        //
+        function unless(pred: (req: express.Request) => boolean, middleware: Function) {
+            return (req: express.Request, res: express.Response, next: Function) => {
+                if (pred(req)) {
+                    next(); // Skip this middleware.
+                }
+                else {
+                    middleware(req, res, next); // Invoke middleware.
+                }
+            }
+        }
+
+        unless(req => req.method === "PUT", bodyParser.json());
+        unless(req => req.method === "PUT", bodyParser.urlencoded({ extended: true }));
 
         if (enableMorgan) {
             console.log("Enabling Morgan request tracing.");
