@@ -409,8 +409,8 @@ export class MicroService implements IMicroService {
             }
         }
 
-        unless(req => req.method === "PUT", bodyParser.json());
-        unless(req => req.method === "PUT", bodyParser.urlencoded({ extended: true }));
+        this.expressApp.use(unless(req => req.method === "PUT", bodyParser.json()));
+        this.expressApp.use(unless(req => req.method === "PUT", bodyParser.urlencoded({ extended: true })));
 
         if (enableMorgan) {
             console.log("Enabling Morgan request tracing.");
