@@ -6,7 +6,6 @@ import * as express from 'express';
 import * as amqp from 'amqplib';
 import axios from "axios";
 import * as request from 'request';
-import * as requestPromise from 'request-promise';
 import { asyncHandler, retry, sleep, verifyBodyParam, verifyQueryParam } from './utils';
 export { asyncHandler, retry, sleep, verifyBodyParam, verifyQueryParam };
 const morganBody = require('morgan-body');
@@ -495,7 +494,6 @@ export class MicroService implements IMicroService {
                 });
             },
 
-
             /**
              * Setup serving of static files.
              * 
@@ -518,8 +516,13 @@ export class MicroService implements IMicroService {
              * @param params Query parameters for the request.
              */
             get: async (serviceName: string, route: string, body?: any): Promise<any> => {
+
                 const url = "http://" + serviceName + route;
-                return await axios.get(url, body);
+                this.verbose(`HTTP GET request to ${url}`);
+                const startTime = performance.now();
+                const response = await axios.get(url, body);
+                this.verbose(`HTTP get request to ${url} finished in ${(performance.now() - startTime).toFixed(2)}ms`);
+                return response;
             },
 
             /**
@@ -531,7 +534,11 @@ export class MicroService implements IMicroService {
              */
             post: async (serviceName: string, route: string, body: any): Promise<any> => {
                 const url = "http://" + serviceName + route;
-                return await axios.post(url, body);
+                this.verbose(`HTTP POST request to ${url}`);
+                const startTime = performance.now();
+                const response  = await axios.post(url, body);
+                this.verbose(`HTTP POST request to ${url} finished in ${(performance.now() - startTime).toFixed(2)}ms`);
+                return response;
             },
 
             /**
