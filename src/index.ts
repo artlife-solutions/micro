@@ -108,6 +108,10 @@ export interface IMicroServiceConfig {
      */
     messagingHost?: string;
 
+    /**
+     * Enables morgan request tracing.
+     */
+    enableMorgan?: boolean;
 }
 
 /**
@@ -404,7 +408,7 @@ export class MicroService implements IMicroService {
         this.expressApp.use(unless(req => req.method === "PUT", bodyParser.json()));
         this.expressApp.use(unless(req => req.method === "PUT", bodyParser.urlencoded({ extended: true })));
 
-        if (enableMorgan) {
+        if (this.config.enableMorgan || enableMorgan) {
             console.log("Enabling Morgan request tracing.");
             morganBody(this.expressApp, {
                 noColors: true,
