@@ -13,6 +13,7 @@ const morganBody = require('morgan-body');
 import * as http from 'http';
 import * as bodyParser from 'body-parser';
 import uuid = require('uuid');
+import { performance } from 'perf_hooks';
 
 const inProduction = process.env.NODE_ENV === "production";
 const enableMorgan = !inProduction || process.env.ENABLE_MORGAN === "true";
@@ -424,9 +425,11 @@ export class MicroService implements IMicroService {
                 this.expressApp.get(route, (req: express.Request, res: express.Response) => {
                     this.verbose("Handling GET " + route);
 
+                    const startTime = performance.now();
+
                     requestHandler(req, res)
                         .then(() => {
-                            this.verbose(`HTTP GET handler for ${route} finished.`);
+                            this.verbose(`HTTP GET handler for ${route} finished in ${(performance.now() - startTime).toFixed(2)}ms`);
                         })
                         .catch(err => {
                             console.error("Error from handler: HTTP GET " + route);
@@ -447,9 +450,11 @@ export class MicroService implements IMicroService {
                 this.expressApp.post(route, (req: express.Request, res: express.Response) => {
                     this.verbose("Handling POST " + route);
 
+                    const startTime = performance.now();
+
                     requestHandler(req, res)
                         .then(() => {
-                            this.verbose(`HTTP POST handler for ${route} finished.`);
+                            this.verbose(`HTTP POST handler for ${route} finished in ${(performance.now() - startTime).toFixed(2)}ms`);
                         })
                         .catch(err => {
                             console.error("Error from handler: HTTP POST " + route);
@@ -473,9 +478,11 @@ export class MicroService implements IMicroService {
                 this.expressApp.put(route, (req: express.Request, res: express.Response) => {
                     this.verbose("Handling PUT " + route);
 
+                    const startTime = performance.now();
+
                     requestHandler(req, res)
                         .then(() => {
-                            this.verbose(`HTTP PUT handler for ${route} finished.`);
+                            this.verbose(`HTTP PUT handler for ${route} finished in ${(performance.now() - startTime).toFixed(2)}ms`);
                         })
                         .catch(err => {
                             console.error("Error from handler: HTTP PUT " + route);
