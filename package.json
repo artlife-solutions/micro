@@ -1,6 +1,6 @@
 {
     "name": "@artlife/micro",
-    "version": "0.0.71",
+    "version": "0.0.72",
     "description": "A tiny and very opinionated microservices framework inspired by expressjs.",
     "main": "build/index.js",
     "types": "build/index.d.ts",
@@ -31,8 +31,10 @@
         "body-parser": "^1.19.0",
         "chai": "4.2.0",
         "express": "^4.16.4",
+        "express-prom-bundle": "^6.1.0",
         "moment": "2.22.2",
         "morgan-body": "^2.4.5",
+        "prom-client": "^12.0.0",
         "request": "^2.88.0",
         "request-promise": "^4.2.2",
         "uuid": "^3.3.3"

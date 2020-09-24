@@ -13,6 +13,7 @@ import * as http from 'http';
 import * as bodyParser from 'body-parser';
 import uuid = require('uuid');
 import { performance } from 'perf_hooks';
+import * as promBundle from "express-prom-bundle";
 
 const inProduction = process.env.NODE_ENV === "production";
 const enableMorgan = !inProduction || process.env.ENABLE_MORGAN === "true";
@@ -559,6 +560,14 @@ export class MicroService implements IMicroService {
                 req.pipe(request(url)).pipe(res);
             }
         };
+
+        this.expressApp.use(promBundle({
+            includeMethod: true,
+            includePath: true,
+            customLabels: {
+                service: config.serviceName,
+            },
+        }));
     }
 
     //
